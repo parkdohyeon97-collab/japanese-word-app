@@ -59,7 +59,8 @@ const defaultWords = [
 const CATEGORY_NAMES = {
   word: "단어",
   grammar: "문법",
-  conversation: "회화"
+  conversation: "회화",
+  review: "N5~N3 추가단어"
 };
 
 const screens = {
@@ -77,6 +78,7 @@ const chapterList = document.getElementById("chapterList");
 const wordCategoryCount = document.getElementById("wordCategoryCount");
 const grammarCategoryCount = document.getElementById("grammarCategoryCount");
 const conversationCategoryCount = document.getElementById("conversationCategoryCount");
+const reviewCategoryCount = document.getElementById("reviewCategoryCount");
 const annoyingMenuCount = document.getElementById("annoyingMenuCount");
 
 const closeChapterButton = document.getElementById("closeChapterButton");
@@ -195,6 +197,7 @@ function renderHome() {
   wordCategoryCount.textContent = `${getCategoryItems("word").length}개`;
   grammarCategoryCount.textContent = `${getCategoryItems("grammar").length}개`;
   conversationCategoryCount.textContent = `${getCategoryItems("conversation").length}개`;
+  reviewCategoryCount.textContent = `${getCategoryItems("review").length}개`;
 }
 
 function renderChapterScreen() {

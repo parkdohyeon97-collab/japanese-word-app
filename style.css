@@ -574,3 +574,16 @@ pre {
     transform: none;
   }
 }
+
+
+/* N5~N3 추가단어 카드 */
+.review-title {
+  line-height: 1.18;
+  font-size: clamp(28px, 7vw, 42px);
+}
+
+@media (min-width: 700px) {
+  .category-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
