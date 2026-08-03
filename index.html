@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1113">
+  <title>일본어 학습 앱</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- 첫 화면: 목차 -->
+    <section id="homeScreen" class="screen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">박도현의 일본어 공부장</p>
+          <h1>목차</h1>
+        </div>
+      </header>
+
+      <div id="categoryList" class="category-list">
+        <button class="category-book" data-category="word" type="button">
+          <span class="book-spine"></span>
+          <span class="book-title">단어</span>
+          <span id="wordCategoryCount" class="book-count">50개</span>
+        </button>
+
+        <button class="category-book" data-category="grammar" type="button">
+          <span class="book-spine"></span>
+          <span class="book-title">문법</span>
+          <span id="grammarCategoryCount" class="book-count">0개</span>
+        </button>
+
+        <button class="category-book" data-category="conversation" type="button">
+          <span class="book-spine"></span>
+          <span class="book-title">회화</span>
+          <span id="conversationCategoryCount" class="book-count">0개</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 장 목록 -->
+    <section id="chapterScreen" class="screen" hidden>
+      <header class="page-header wide-header">
+        <button id="closeChapterButton" class="back-button" type="button">←</button>
+        <div>
+          <p class="eyebrow">50개씩 누적 학습</p>
+          <h2 id="categoryTitle">단어</h2>
+        </div>
+        <button id="openAddButton" class="circle-button small-circle" type="button">＋</button>
+      </header>
+
+      <section class="summary-grid single-summary">
+        <article class="summary-card">
+          <span>현재 등록</span>
+          <strong id="categoryTotalCount">0</strong>
+        </article>
+      </section>
+
+      <div id="chapterList" class="chapter-grid"></div>
+
+      <button id="openAnnoyingButton" class="menu-card danger-card" type="button">
+        <div>
+          <strong>😡 짜증나는 항목</strong>
+          <span>공부하겠음을 8번 이상 누른 항목</span>
+        </div>
+        <b id="annoyingMenuCount">0개</b>
+      </button>
+    </section>
+
+    <!-- 추가 -->
+    <section id="addScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeAddButton" class="back-button" type="button">←</button>
+        <h2 id="addTitle">단어 추가</h2>
+        <div></div>
+      </header>
+
+      <div class="tabs">
+        <button id="singleTabButton" class="tab active" type="button">1개 추가</button>
+        <button id="bulkTabButton" class="tab" type="button">여러 개 추가</button>
+      </div>
+
+      <form id="singleForm" class="panel">
+        <label>일본어<input id="wordInput" required placeholder="例) 食堂"></label>
+        <label>읽는 법<input id="readingInput" required placeholder="例) しょくどう"></label>
+        <label>한국어 뜻<input id="meaningInput" required placeholder="例) 식당"></label>
+        <button class="primary-button" type="submit">저장하기</button>
+      </form>
+
+      <section id="bulkPanel" class="panel" hidden>
+        <p class="help">한 줄에 하나씩 띄어쓰기로 입력하면 됩니다.</p>
+        <pre>食堂 しょくどう 식당
+途端 とたん ~하자마자 바로 그 순간</pre>
+        <textarea id="bulkInput" rows="14" placeholder="여기에 여러 개 붙여넣기"></textarea>
+        <button id="saveBulkButton" class="primary-button" type="button">자동 분석해서 저장</button>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title"><h2>직접 추가한 항목</h2></div>
+        <div id="recentWordList" class="list"></div>
+      </section>
+    </section>
+
+    <!-- 공부 -->
+    <section id="studyScreen" class="study-screen" hidden>
+      <header class="study-header">
+        <button id="exitStudyButton" type="button">☰</button>
+        <div>
+          <strong id="studyTitle">단어 제 1장 1회독</strong>
+          <span><span id="currentNumber">1</span> / <span id="totalNumber">50</span></span>
+        </div>
+        <button id="closeStudyButton" type="button">×</button>
+      </header>
+
+      <div class="study-meta">
+        <span id="wrongCountBadge">공부하겠음 0회</span>
+        <button id="soundButton" class="sound-button" type="button">🔊</button>
+      </div>
+
+      <section id="soundTouchArea" class="word-area">
+        <div id="word" class="main-word">腕</div>
+        <div id="answer" class="answer" hidden>
+          <div id="reading" class="reading">うで</div>
+          <div id="meaning" class="meaning">팔</div>
+        </div>
+      </section>
+
+      <button id="meaningButton" class="meaning-button" type="button">뜻 보기</button>
+
+      <div class="choice-grid">
+        <button id="studyAgainButton" class="choice-button unsure" type="button">? 공부하겠음</button>
+        <button id="knowButton" class="choice-button know" type="button">✓ 알고 있음</button>
+      </div>
+    </section>
+
+    <!-- 완료 -->
+    <section id="completeScreen" class="complete-screen" hidden>
+      <div class="complete-mark">✓</div>
+      <h2 id="completeTitle">학습 완료!</h2>
+      <p id="completeMessage"></p>
+      <button id="completeHomeButton" class="primary-button" type="button">목차로</button>
+    </section>
+
+    <!-- 짜증나는 항목 -->
+    <section id="annoyingScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeAnnoyingButton" class="back-button" type="button">←</button>
+        <h2>짜증나는 항목</h2>
+        <div></div>
+      </header>
+
+      <button id="studyAnnoyingButton" class="primary-button" type="button">이 항목들만 공부</button>
+      <div id="annoyingWordList" class="list"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
