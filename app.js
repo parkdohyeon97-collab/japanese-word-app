@@ -1,7 +1,20 @@
+import {
+  waitForFirebaseReady,
+  listenToSharedItems,
+  addSharedItem,
+  addSharedItems,
+  removeSharedItem
+} from "./firebase.js";
+
 const CHAPTER_SIZE = 50;
 const ANNOYING_LIMIT = 8;
 const USER_ITEMS_KEY = "jpAppItemsV5";
 const WRONG_COUNTS_KEY = "jpAppWrongCountsV5";
+const ADDED_BY_KEY = "jpAppAddedByV9";
+const MIGRATION_KEY = "jpAppCloudMigrationV9";
+
+let sharedItems = [];
+let cloudConnected = false;
 
 const defaultWords = [
   { id: "word-1", word: "腕", reading: "うで", meaning: "팔" },
@@ -111,6 +124,8 @@ const meaningInput = document.getElementById("meaningInput");
 const bulkInput = document.getElementById("bulkInput");
 const saveBulkButton = document.getElementById("saveBulkButton");
 const recentWordList = document.getElementById("recentWordList");
+const addedBySelect = document.getElementById("addedBySelect");
+const cloudStatus = document.getElementById("cloudStatus");
 
 const studyTitle = document.getElementById("studyTitle");
 const currentNumber = document.getElementById("currentNumber");
@@ -178,11 +193,11 @@ function saveWrongCounts(counts) {
 
 function getAllItems() {
   const baseWords = defaultWords.map(item => ({ ...item, category: "word" }));
-  const userItems = getUserItems().map(item => ({
+  const cloudItems = sharedItems.map(item => ({
     ...item,
     category: item.category || "word"
   }));
-  return [...baseWords, ...userItems];
+  return [...baseWords, ...cloudItems];
 }
 
 function getCategoryItems(category) {
@@ -300,21 +315,27 @@ function removeSavedDuplicates() {
 }
 
 function renderRecentItems() {
-  const items = getUserItems().filter(item => (item.category || "word") === currentCategory);
+  const items = sharedItems.filter(item => (item.category || "word") === currentCategory);
   recentWordList.innerHTML = "";
 
-  if (items.length === 0) {
-    recentWordList.innerHTML = '<div class="empty-box">직접 추가한 항목이 아직 없습니다.</div>';
+  if (!cloudConnected) {
+    recentWordList.innerHTML = '<div class="empty-box">공유 단어장에 연결 중입니다.</div>';
     return;
   }
 
-  [...items].reverse().slice(0, 30).forEach(item => {
+  if (items.length === 0) {
+    recentWordList.innerHTML = '<div class="empty-box">공유로 추가한 항목이 아직 없습니다.</div>';
+    return;
+  }
+
+  [...items].reverse().slice(0, 50).forEach(item => {
     const row = document.createElement("div");
     row.className = "list-item";
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(item.word)}</strong>
         <span>${escapeHtml(item.reading)} · ${escapeHtml(item.meaning)}</span>
+        <small class="added-by">추가: ${escapeHtml(item.addedBy || "이름 없음")}</small>
       </div>
       <button type="button" data-id="${item.id}">삭제</button>
     `;
@@ -323,21 +344,22 @@ function renderRecentItems() {
   });
 }
 
-function deleteItem(id) {
-  if (!confirm("이 항목을 삭제할까요?")) return;
+async function deleteItem(id) {
+  if (!confirm("이 항목을 두 사람의 공유 단어장에서 삭제할까요?")) return;
 
-  saveUserItems(getUserItems().filter(item => item.id !== id));
+  try {
+    await removeSharedItem(id);
 
-  const counts = getWrongCounts();
-  delete counts[id];
-  saveWrongCounts(counts);
-
-  renderRecentItems();
-  renderChapterScreen();
-  renderHome();
+    const counts = getWrongCounts();
+    delete counts[id];
+    saveWrongCounts(counts);
+  } catch (error) {
+    console.error(error);
+    alert("삭제하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  }
 }
 
-singleForm.addEventListener("submit", event => {
+singleForm.addEventListener("submit", async event => {
   event.preventDefault();
 
   const word = wordInput.value.trim();
@@ -346,26 +368,31 @@ singleForm.addEventListener("submit", event => {
 
   if (!word || !reading || !meaning) return;
 
+  if (!cloudConnected) {
+    alert("공유 단어장 연결이 끝난 뒤 다시 눌러 주세요.");
+    return;
+  }
+
   if (isDuplicate(word)) {
     alert("이미 등록된 항목입니다.");
     return;
   }
 
-  const items = getUserItems();
-  items.push({
-    id: makeId(),
-    category: currentCategory,
-    word,
-    reading,
-    meaning
-  });
+  try {
+    await addSharedItem({
+      category: currentCategory,
+      word,
+      reading,
+      meaning,
+      addedBy: addedBySelect.value
+    });
 
-  saveUserItems(items);
-  singleForm.reset();
-  renderRecentItems();
-  renderChapterScreen();
-  renderHome();
-  alert("저장됐습니다.");
+    singleForm.reset();
+    alert("두 사람의 공유 단어장에 저장됐습니다.");
+  } catch (error) {
+    console.error(error);
+    alert("저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  }
 });
 
 function parseBulkItems(rawText) {
@@ -396,11 +423,16 @@ function parseBulkItems(rawText) {
   return { items: parsed, errorCount };
 }
 
-saveBulkButton.addEventListener("click", () => {
+saveBulkButton.addEventListener("click", async () => {
   const raw = bulkInput.value.trim();
 
   if (!raw) {
     alert("추가할 내용을 붙여넣어 주세요.");
+    return;
+  }
+
+  if (!cloudConnected) {
+    alert("공유 단어장 연결이 끝난 뒤 다시 눌러 주세요.");
     return;
   }
 
@@ -414,37 +446,63 @@ saveBulkButton.addEventListener("click", () => {
   const preview = parsed.items
     .slice(0, 5)
     .map(item => `${item.word} / ${item.reading} / ${item.meaning}`)
-    .join("\n");
+    .join("
+");
 
   const moreText = parsed.items.length > 5
-    ? `\n외 ${parsed.items.length - 5}개`
+    ? `
+외 ${parsed.items.length - 5}개`
     : "";
 
-  if (!confirm(`${parsed.items.length}개를 찾았습니다.\n\n${preview}${moreText}\n\n저장할까요?`)) {
+  if (!confirm(`${parsed.items.length}개를 찾았습니다.
+
+${preview}${moreText}
+
+공유 단어장에 저장할까요?`)) {
     return;
   }
 
-  const userItems = getUserItems();
-  let saved = 0;
   let duplicate = 0;
-  const existingKeys = new Set(getCategoryItems(currentCategory).map(item => normalizeDuplicateText(item.word)));
+  const existingKeys = new Set(
+    getCategoryItems(currentCategory).map(item => normalizeDuplicateText(item.word))
+  );
+
+  const itemsToSave = [];
 
   parsed.items.forEach(item => {
     const key = normalizeDuplicateText(item.word);
-    if (!key || existingKeys.has(key)) { duplicate += 1; return; }
+
+    if (!key || existingKeys.has(key)) {
+      duplicate += 1;
+      return;
+    }
+
     existingKeys.add(key);
-    userItems.push({ id: makeId(), category: currentCategory, ...item });
-    saved += 1;
+    itemsToSave.push({
+      category: currentCategory,
+      ...item,
+      addedBy: addedBySelect.value
+    });
   });
 
-  saveUserItems(userItems);
-  bulkInput.value = "";
+  try {
+    if (itemsToSave.length > 0) {
+      await addSharedItems(itemsToSave);
+    }
 
-  renderRecentItems();
-  renderChapterScreen();
-  renderHome();
+    bulkInput.value = "";
+    alert(`공유 저장 ${itemsToSave.length}개
+중복 제외 ${duplicate}개
+형식 오류 ${parsed.errorCount}개`);
+  } catch (error) {
+    console.error(error);
+    alert("일부 또는 전체 항목을 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  }
+});
 
-  alert(`저장 ${saved}개\n중복 제외 ${duplicate}개\n형식 오류 ${parsed.errorCount}개`);
+addedBySelect.value = localStorage.getItem(ADDED_BY_KEY) || "도현";
+addedBySelect.addEventListener("change", () => {
+  localStorage.setItem(ADDED_BY_KEY, addedBySelect.value);
 });
 
 singleTabButton.addEventListener("click", () => {
@@ -810,7 +868,98 @@ exitStudyButton.addEventListener("click", returnHome);
 closeStudyButton.addEventListener("click", returnHome);
 completeHomeButton.addEventListener("click", returnHome);
 
-const removedDuplicateCount = removeSavedDuplicates();
+function setCloudStatus(text, state = "loading") {
+  cloudStatus.textContent = text;
+  cloudStatus.dataset.state = state;
+}
+
+async function migrateLocalItemsToCloud() {
+  if (localStorage.getItem(MIGRATION_KEY) === "done") return;
+
+  const localItems = getUserItems();
+
+  if (localItems.length === 0) {
+    localStorage.setItem(MIGRATION_KEY, "done");
+    return;
+  }
+
+  const existingKeys = new Set(
+    sharedItems.map(item => `${item.category || "word"}::${normalizeDuplicateText(item.word)}`)
+  );
+
+  const addedBy = localStorage.getItem(ADDED_BY_KEY) || "도현";
+  const itemsToMigrate = localItems
+    .filter(item => {
+      const key = `${item.category || "word"}::${normalizeDuplicateText(item.word)}`;
+      if (!normalizeDuplicateText(item.word) || existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    })
+    .map(item => ({
+      category: item.category || "word",
+      word: item.word,
+      reading: item.reading,
+      meaning: item.meaning,
+      example: item.example || "",
+      addedBy
+    }));
+
+  if (itemsToMigrate.length > 0) {
+    await addSharedItems(itemsToMigrate);
+  }
+
+  saveUserItems([]);
+  localStorage.setItem(MIGRATION_KEY, "done");
+
+  alert(
+    itemsToMigrate.length > 0
+      ? `이 기기에 저장돼 있던 항목 ${itemsToMigrate.length}개를 공유 단어장으로 옮겼습니다.`
+      : "이 기기의 기존 항목은 이미 공유 단어장에 있어 중복 없이 정리했습니다."
+  );
+}
+
+async function startCloudSync() {
+  setCloudStatus("로그인 중…", "loading");
+
+  try {
+    await waitForFirebaseReady();
+
+    listenToSharedItems(
+      async items => {
+        const firstConnection = !cloudConnected;
+        sharedItems = items;
+        cloudConnected = true;
+        setCloudStatus("공유 연결됨", "connected");
+
+        renderHome();
+
+        if (!screens.chapter.hidden) renderChapterScreen();
+        if (!screens.add.hidden) renderRecentItems();
+        if (!screens.search.hidden) renderSearchResults();
+
+        if (firstConnection) {
+          try {
+            await migrateLocalItemsToCloud();
+          } catch (migrationError) {
+            console.error("기존 항목 이전 실패:", migrationError);
+            alert("기존 항목을 공유 단어장으로 옮기지 못했습니다. 기존 자료는 기기에 남아 있습니다.");
+          }
+        }
+      },
+      error => {
+        console.error(error);
+        cloudConnected = false;
+        setCloudStatus("연결 오류", "error");
+      }
+    );
+  } catch (error) {
+    console.error(error);
+    cloudConnected = false;
+    setCloudStatus("로그인 오류", "error");
+    alert("Firebase에 로그인하지 못했습니다. 인터넷 연결과 Firebase 설정을 확인해 주세요.");
+  }
+}
+
 renderHome();
 showScreen("home");
-if (removedDuplicateCount > 0) setTimeout(() => alert(`기존 중복 항목 ${removedDuplicateCount}개를 자동으로 정리했습니다.`), 250);
+startCloudSync();

@@ -17,7 +17,10 @@
           <p class="eyebrow">박도현의 일본어 공부장</p>
           <h1>목차</h1>
         </div>
-        <button id="openSearchButton" class="search-open-button" type="button" aria-label="검색 열기">⌕</button>
+        <div class="home-actions">
+          <span id="cloudStatus" class="cloud-status">연결 중…</span>
+          <button id="openSearchButton" class="search-open-button" type="button" aria-label="검색 열기">⌕</button>
+        </div>
       </header>
 
       <div id="categoryList" class="category-list">
@@ -145,6 +148,17 @@
         <div></div>
       </header>
 
+      <section class="panel contributor-panel">
+        <label>
+          추가한 사람
+          <select id="addedBySelect">
+            <option value="도현">도현</option>
+            <option value="여자친구">여자친구</option>
+          </select>
+        </label>
+        <p class="help">여기서 고른 이름이 공유 단어장에 함께 표시됩니다.</p>
+      </section>
+
       <div class="tabs">
         <button id="singleTabButton" class="tab active" type="button">1개 추가</button>
         <button id="bulkTabButton" class="tab" type="button">여러 개 추가</button>
@@ -224,7 +238,6 @@
     </section>
 
   </main>
-
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

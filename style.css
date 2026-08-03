@@ -637,3 +637,69 @@ pre {
   .random-home-card { width:min(100%,980px); }
   .random-category-grid { grid-template-columns:repeat(2,1fr); }
 }
+
+
+/* v9 공유 단어장 */
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cloud-status {
+  max-width: 104px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.cloud-status[data-state="connected"] {
+  border-color: var(--teal-dark);
+  background: var(--teal-soft);
+  color: #bce7ec;
+}
+
+.cloud-status[data-state="error"] {
+  border-color: #7a3a33;
+  background: #3b211f;
+  color: #ffb3a5;
+}
+
+.contributor-panel {
+  max-width: 760px;
+  margin: 0 auto 14px;
+}
+
+.contributor-panel select {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.added-by {
+  display: block;
+  margin-top: 6px;
+  color: var(--teal);
+  font-size: 11px;
+}
+
+@media (max-width: 480px) {
+  .home-actions {
+    gap: 7px;
+  }
+
+  .cloud-status {
+    max-width: 86px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
+}
