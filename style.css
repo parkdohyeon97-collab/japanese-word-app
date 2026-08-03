@@ -128,7 +128,7 @@ h2 { margin-bottom: 0; }
 }
 
 .chapter-card::after {
-  content: "›";
+  content: ">";
   position: absolute;
   right: 20px;
   top: 50%;
@@ -139,8 +139,9 @@ h2 { margin-bottom: 0; }
   place-items: center;
   border: 2px solid var(--teal);
   border-radius: 50%;
+  font-size: 28px;
+font-weight: 700;
   color: var(--teal);
-  font-size: 30px;
   line-height: 1;
 }
 
