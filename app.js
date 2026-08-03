@@ -446,19 +446,13 @@ saveBulkButton.addEventListener("click", async () => {
   const preview = parsed.items
     .slice(0, 5)
     .map(item => `${item.word} / ${item.reading} / ${item.meaning}`)
-    .join("
-");
+    .join("\n");
 
   const moreText = parsed.items.length > 5
-    ? `
-외 ${parsed.items.length - 5}개`
+    ? `\n외 ${parsed.items.length - 5}개`
     : "";
 
-  if (!confirm(`${parsed.items.length}개를 찾았습니다.
-
-${preview}${moreText}
-
-공유 단어장에 저장할까요?`)) {
+  if (!confirm(`${parsed.items.length}개를 찾았습니다.\n\n${preview}${moreText}\n\n공유 단어장에 저장할까요?`)) {
     return;
   }
 
@@ -491,9 +485,7 @@ ${preview}${moreText}
     }
 
     bulkInput.value = "";
-    alert(`공유 저장 ${itemsToSave.length}개
-중복 제외 ${duplicate}개
-형식 오류 ${parsed.errorCount}개`);
+    alert(`공유 저장 ${itemsToSave.length}개\n중복 제외 ${duplicate}개\n형식 오류 ${parsed.errorCount}개`);
   } catch (error) {
     console.error(error);
     alert("일부 또는 전체 항목을 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
