@@ -70,7 +70,8 @@ const screens = {
   study: document.getElementById("studyScreen"),
   complete: document.getElementById("completeScreen"),
   annoying: document.getElementById("annoyingScreen"),
-  search: document.getElementById("searchScreen")
+  search: document.getElementById("searchScreen"),
+  random: document.getElementById("randomScreen")
 };
 
 const categoryTitle = document.getElementById("categoryTitle");
@@ -87,6 +88,14 @@ const searchInput = document.getElementById("searchInput");
 const clearSearchButton = document.getElementById("clearSearchButton");
 const searchSummary = document.getElementById("searchSummary");
 const searchResultList = document.getElementById("searchResultList");
+
+const openRandomButton = document.getElementById("openRandomButton");
+const closeRandomButton = document.getElementById("closeRandomButton");
+const randomWordCount = document.getElementById("randomWordCount");
+const randomReviewCount = document.getElementById("randomReviewCount");
+const randomCountPanel = document.getElementById("randomCountPanel");
+const randomSelectedTitle = document.getElementById("randomSelectedTitle");
+const randomCountHelp = document.getElementById("randomCountHelp");
 
 const closeChapterButton = document.getElementById("closeChapterButton");
 const openAddButton = document.getElementById("openAddButton");
@@ -135,6 +144,8 @@ let roundNumber = 1;
 let currentIndex = 0;
 let currentItems = [];
 let nextRoundItems = [];
+let randomCategory = "word";
+let randomRequestedCount = 50;
 
 function loadJson(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -205,6 +216,8 @@ function renderHome() {
   grammarCategoryCount.textContent = `${getCategoryItems("grammar").length}개`;
   conversationCategoryCount.textContent = `${getCategoryItems("conversation").length}개`;
   reviewCategoryCount.textContent = `${getCategoryItems("review").length}개`;
+  randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
+  randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
 }
 
 function renderChapterScreen() {
@@ -230,16 +243,19 @@ function renderChapterScreen() {
   const chapterCount = Math.ceil(items.length / CHAPTER_SIZE);
 
   for (let chapter = 1; chapter <= chapterCount; chapter += 1) {
+    const blockStart = Math.floor((chapter - 1) / 4) * 200;
     const end = Math.min(chapter * CHAPTER_SIZE, items.length);
-    const start = (chapter - 1) * CHAPTER_SIZE + 1;
+    const newStart = (chapter - 1) * CHAPTER_SIZE + 1;
+    const studyStart = blockStart + 1;
+    const studyCount = end - blockStart;
 
     const card = document.createElement("button");
     card.type = "button";
     card.className = "chapter-card";
     card.innerHTML = `
       <span class="chapter-name">제 ${chapter}장</span>
-      <strong>1 ~ ${end}</strong>
-      <small>새 항목 ${start}~${end}<br>총 ${end}개 누적 학습</small>
+      <strong>${studyStart} ~ ${end}</strong>
+      <small>새 항목 ${newStart}~${end}<br>이번 묶음 ${studyCount}개 누적 학습</small>
     `;
     card.addEventListener("click", () => startChapter(chapter));
     chapterList.appendChild(card);
@@ -445,13 +461,66 @@ bulkTabButton.addEventListener("click", () => {
   singleForm.hidden = true;
 });
 
+function shuffleItems(items) {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function renderRandomScreen() {
+  randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
+  randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
+  randomCountPanel.hidden = true;
+  document.querySelectorAll(".random-category-button").forEach(button => {
+    button.classList.remove("selected");
+  });
+}
+
+function selectRandomCategory(category, selectedButton) {
+  randomCategory = category;
+  const itemCount = getCategoryItems(category).length;
+
+  document.querySelectorAll(".random-category-button").forEach(button => {
+    button.classList.toggle("selected", button === selectedButton);
+  });
+
+  randomSelectedTitle.textContent = CATEGORY_NAMES[category];
+  randomCountPanel.hidden = false;
+  randomCountHelp.textContent = itemCount === 0
+    ? "아직 등록된 항목이 없습니다."
+    : `현재 ${itemCount}개 등록 · 등록 개수 이하만 선택 가능`;
+
+  document.querySelectorAll(".random-count-button").forEach(button => {
+    const count = Number(button.dataset.randomCount);
+    button.disabled = itemCount < count;
+  });
+}
+
+function startRandomStudy(count) {
+  const items = getCategoryItems(randomCategory);
+
+  if (items.length < count) {
+    alert(`${CATEGORY_NAMES[randomCategory]}가 ${count}개보다 적습니다.`);
+    return;
+  }
+
+  currentCategory = randomCategory;
+  randomRequestedCount = count;
+  studyMode = "random";
+  startStudy(shuffleItems(items).slice(0, count));
+}
+
 function startChapter(chapter) {
   const items = getCategoryItems(currentCategory);
+  const blockStart = Math.floor((chapter - 1) / 4) * 200;
   const end = Math.min(chapter * CHAPTER_SIZE, items.length);
 
   studyMode = "chapter";
   selectedChapter = chapter;
-  startStudy(items.slice(0, end));
+  startStudy(items.slice(blockStart, end));
 }
 
 function startAnnoyingStudy() {
@@ -494,7 +563,9 @@ function showCurrentItem() {
     ? `${categoryName} 짜증나는 항목 ${roundNumber}회독`
     : studyMode === "search"
       ? `${categoryName} 검색 결과`
-      : `${categoryName} 제 ${selectedChapter}장 ${roundNumber}회독`;
+      : studyMode === "random"
+        ? `${categoryName} 랜덤 ${randomRequestedCount}개`
+        : `${categoryName} 제 ${selectedChapter}장 ${roundNumber}회독`;
 
   currentNumber.textContent = currentIndex + 1;
   totalNumber.textContent = currentItems.length;
@@ -540,9 +611,13 @@ function finishStudy() {
     ? `${categoryName} 복습 완료!`
     : studyMode === "search"
       ? `${categoryName} 확인 완료!`
-      : `${categoryName} 제 ${selectedChapter}장 완료!`;
+      : studyMode === "random"
+        ? `${categoryName} 랜덤복습 완료!`
+        : `${categoryName} 제 ${selectedChapter}장 완료!`;
 
-  completeMessage.textContent = `${roundNumber}회독까지 진행했습니다.`;
+  completeMessage.textContent = studyMode === "random"
+    ? `${randomRequestedCount}개 랜덤복습을 마쳤습니다.`
+    : `${roundNumber}회독까지 진행했습니다.`;
   renderHome();
   showScreen("complete");
 }
@@ -611,7 +686,85 @@ function renderAnnoying() {
   });
 }
 
-\nfunction normalizeSearchText(value) {\n  return String(value || "").normalize("NFKC").toLocaleLowerCase("ko").replace(/[　]/g, " ").trim();\n}\nfunction renderSearchResults() {\n  const query = normalizeSearchText(searchInput.value);\n  searchResultList.innerHTML = "";\n  if (!query) { searchSummary.textContent = "검색어를 입력해 주세요."; return; }\n  const compact = query.replace(/\\s+/g, "");\n  const results = getAllItems().filter(item => [item.word,item.reading,item.meaning,CATEGORY_NAMES[item.category||"word"]].some(field => {\n    const n = normalizeSearchText(field); return n.includes(query) || n.replace(/\\s+/g, "").includes(compact);\n  }));\n  searchSummary.textContent = `검색 결과 ${results.length}개`;\n  if (!results.length) { searchResultList.innerHTML = '<div class="search-empty">일치하는 항목이 없습니다.</div>'; return; }\n  results.slice(0,200).forEach(item => {\n    const category=item.category||"word"; const row=document.createElement("button");\n    row.type="button"; row.className="search-result-item";\n    row.innerHTML=`<div><strong>${escapeHtml(item.word)}</strong><span class="result-reading">${escapeHtml(item.reading)}</span><span class="result-meaning">${escapeHtml(item.meaning)}</span></div><span class="result-category">${escapeHtml(CATEGORY_NAMES[category])}</span>`;\n    row.addEventListener("click",()=>{ currentCategory=category; studyMode="search"; startStudy([item]); });\n    searchResultList.appendChild(row);\n  });\n}\nopenSearchButton.addEventListener("click",()=>{ searchInput.value=""; searchResultList.innerHTML=""; searchSummary.textContent="검색어를 입력해 주세요."; showScreen("search"); setTimeout(()=>searchInput.focus(),50); });\ncloseSearchButton.addEventListener("click",()=>{ renderHome(); showScreen("home"); });\nclearSearchButton.addEventListener("click",()=>{ searchInput.value=""; renderSearchResults(); searchInput.focus(); });\nsearchInput.addEventListener("input",renderSearchResults);\n\ndocument.querySelectorAll(".category-book").forEach(button => {
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("ko")
+    .replace(/[　]/g, " ")
+    .trim();
+}
+
+function renderSearchResults() {
+  const query = normalizeSearchText(searchInput.value);
+  searchResultList.innerHTML = "";
+
+  if (!query) {
+    searchSummary.textContent = "검색어를 입력해 주세요.";
+    return;
+  }
+
+  const compact = query.replace(/\s+/g, "");
+  const results = getAllItems().filter(item =>
+    [item.word, item.reading, item.meaning, CATEGORY_NAMES[item.category || "word"]]
+      .some(field => {
+        const normalized = normalizeSearchText(field);
+        return normalized.includes(query)
+          || normalized.replace(/\s+/g, "").includes(compact);
+      })
+  );
+
+  searchSummary.textContent = `검색 결과 ${results.length}개`;
+
+  if (!results.length) {
+    searchResultList.innerHTML = '<div class="search-empty">일치하는 항목이 없습니다.</div>';
+    return;
+  }
+
+  results.slice(0, 200).forEach(item => {
+    const category = item.category || "word";
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "search-result-item";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(item.word)}</strong>
+        <span class="result-reading">${escapeHtml(item.reading)}</span>
+        <span class="result-meaning">${escapeHtml(item.meaning)}</span>
+      </div>
+      <span class="result-category">${escapeHtml(CATEGORY_NAMES[category])}</span>
+    `;
+    row.addEventListener("click", () => {
+      currentCategory = category;
+      studyMode = "search";
+      startStudy([item]);
+    });
+    searchResultList.appendChild(row);
+  });
+}
+
+openSearchButton.addEventListener("click", () => {
+  searchInput.value = "";
+  searchResultList.innerHTML = "";
+  searchSummary.textContent = "검색어를 입력해 주세요.";
+  showScreen("search");
+  setTimeout(() => searchInput.focus(), 50);
+});
+
+closeSearchButton.addEventListener("click", () => {
+  renderHome();
+  showScreen("home");
+});
+
+clearSearchButton.addEventListener("click", () => {
+  searchInput.value = "";
+  renderSearchResults();
+  searchInput.focus();
+});
+
+searchInput.addEventListener("input", renderSearchResults);
+
+document.querySelectorAll(".category-book").forEach(button => {
   button.addEventListener("click", () => {
     currentCategory = button.dataset.category;
     renderChapterScreen();

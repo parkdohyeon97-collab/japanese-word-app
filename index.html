@@ -45,6 +45,49 @@
           <span id="reviewCategoryCount" class="book-count">0개</span>
         </button>
       </div>
+
+      <button id="openRandomButton" class="random-home-card" type="button">
+        <span class="random-icon">🎲</span>
+        <span>
+          <strong>랜덤복습</strong>
+          <small>단어 · N5~N3 추가단어</small>
+        </span>
+        <b>›</b>
+      </button>
+    </section>
+
+    <!-- 랜덤복습 -->
+    <section id="randomScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeRandomButton" class="back-button" type="button">←</button>
+        <h2>랜덤복습</h2>
+        <div></div>
+      </header>
+
+      <section class="random-panel">
+        <p class="random-guide">복습할 목차를 먼저 선택하세요.</p>
+
+        <div class="random-category-grid">
+          <button class="random-category-button" data-random-category="word" type="button">
+            <strong>단어</strong>
+            <span id="randomWordCount">0개 등록</span>
+          </button>
+          <button class="random-category-button" data-random-category="review" type="button">
+            <strong>N5~N3 추가단어</strong>
+            <span id="randomReviewCount">0개 등록</span>
+          </button>
+        </div>
+
+        <section id="randomCountPanel" class="random-count-panel" hidden>
+          <p><strong id="randomSelectedTitle">단어</strong>에서 몇 개를 복습할까요?</p>
+          <div class="random-count-grid">
+            <button class="random-count-button" data-random-count="50" type="button">50개</button>
+            <button class="random-count-button" data-random-count="100" type="button">100개</button>
+            <button class="random-count-button" data-random-count="200" type="button">200개</button>
+          </div>
+          <small id="randomCountHelp">등록된 개수보다 큰 버튼은 선택할 수 없습니다.</small>
+        </section>
+      </section>
     </section>
 
     <!-- 전체 검색 -->
@@ -70,7 +113,7 @@
       <header class="page-header wide-header">
         <button id="closeChapterButton" class="back-button" type="button">←</button>
         <div>
-          <p class="eyebrow">50개씩 누적 학습</p>
+          <p class="eyebrow">50개씩 추가 · 최대 200개 누적</p>
           <h2 id="categoryTitle">단어</h2>
         </div>
         <button id="openAddButton" class="circle-button small-circle" type="button">＋</button>
