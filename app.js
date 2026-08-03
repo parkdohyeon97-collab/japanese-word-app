@@ -69,7 +69,8 @@ const screens = {
   add: document.getElementById("addScreen"),
   study: document.getElementById("studyScreen"),
   complete: document.getElementById("completeScreen"),
-  annoying: document.getElementById("annoyingScreen")
+  annoying: document.getElementById("annoyingScreen"),
+  search: document.getElementById("searchScreen")
 };
 
 const categoryTitle = document.getElementById("categoryTitle");
@@ -80,6 +81,12 @@ const grammarCategoryCount = document.getElementById("grammarCategoryCount");
 const conversationCategoryCount = document.getElementById("conversationCategoryCount");
 const reviewCategoryCount = document.getElementById("reviewCategoryCount");
 const annoyingMenuCount = document.getElementById("annoyingMenuCount");
+const openSearchButton = document.getElementById("openSearchButton");
+const closeSearchButton = document.getElementById("closeSearchButton");
+const searchInput = document.getElementById("searchInput");
+const clearSearchButton = document.getElementById("clearSearchButton");
+const searchSummary = document.getElementById("searchSummary");
+const searchResultList = document.getElementById("searchResultList");
 
 const closeChapterButton = document.getElementById("closeChapterButton");
 const openAddButton = document.getElementById("openAddButton");
@@ -252,8 +259,28 @@ function makeId() {
   return "user-" + Date.now() + "-" + Math.random().toString(16).slice(2);
 }
 
+function normalizeDuplicateText(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/[\s　]+/g, "").toLocaleLowerCase("ja");
+}
+
 function isDuplicate(word, list = getCategoryItems(currentCategory)) {
-  return list.some(item => item.word.trim() === word.trim());
+  const target = normalizeDuplicateText(word);
+  return list.some(item => normalizeDuplicateText(item.word) === target);
+}
+
+function removeSavedDuplicates() {
+  const userItems = getUserItems();
+  const seen = new Set(defaultWords.map(item => `word::${normalizeDuplicateText(item.word)}`));
+  const cleaned = [];
+  let removed = 0;
+  userItems.forEach(item => {
+    const category = item.category || "word";
+    const key = `${category}::${normalizeDuplicateText(item.word)}`;
+    if (!normalizeDuplicateText(item.word) || seen.has(key)) { removed += 1; return; }
+    seen.add(key); cleaned.push(item);
+  });
+  if (removed > 0) saveUserItems(cleaned);
+  return removed;
 }
 
 function renderRecentItems() {
@@ -384,24 +411,13 @@ saveBulkButton.addEventListener("click", () => {
   const userItems = getUserItems();
   let saved = 0;
   let duplicate = 0;
+  const existingKeys = new Set(getCategoryItems(currentCategory).map(item => normalizeDuplicateText(item.word)));
 
   parsed.items.forEach(item => {
-    const currentList = [
-      ...getCategoryItems(currentCategory),
-      ...userItems.filter(x => (x.category || "word") === currentCategory)
-    ];
-
-    if (isDuplicate(item.word, currentList)) {
-      duplicate += 1;
-      return;
-    }
-
-    userItems.push({
-      id: makeId(),
-      category: currentCategory,
-      ...item
-    });
-
+    const key = normalizeDuplicateText(item.word);
+    if (!key || existingKeys.has(key)) { duplicate += 1; return; }
+    existingKeys.add(key);
+    userItems.push({ id: makeId(), category: currentCategory, ...item });
     saved += 1;
   });
 
@@ -476,7 +492,9 @@ function showCurrentItem() {
 
   studyTitle.textContent = studyMode === "annoying"
     ? `${categoryName} 짜증나는 항목 ${roundNumber}회독`
-    : `${categoryName} 제 ${selectedChapter}장 ${roundNumber}회독`;
+    : studyMode === "search"
+      ? `${categoryName} 검색 결과`
+      : `${categoryName} 제 ${selectedChapter}장 ${roundNumber}회독`;
 
   currentNumber.textContent = currentIndex + 1;
   totalNumber.textContent = currentItems.length;
@@ -520,7 +538,9 @@ function finishStudy() {
 
   completeTitle.textContent = studyMode === "annoying"
     ? `${categoryName} 복습 완료!`
-    : `${categoryName} 제 ${selectedChapter}장 완료!`;
+    : studyMode === "search"
+      ? `${categoryName} 확인 완료!`
+      : `${categoryName} 제 ${selectedChapter}장 완료!`;
 
   completeMessage.textContent = `${roundNumber}회독까지 진행했습니다.`;
   renderHome();
@@ -591,7 +611,7 @@ function renderAnnoying() {
   });
 }
 
-document.querySelectorAll(".category-book").forEach(button => {
+\nfunction normalizeSearchText(value) {\n  return String(value || "").normalize("NFKC").toLocaleLowerCase("ko").replace(/[　]/g, " ").trim();\n}\nfunction renderSearchResults() {\n  const query = normalizeSearchText(searchInput.value);\n  searchResultList.innerHTML = "";\n  if (!query) { searchSummary.textContent = "검색어를 입력해 주세요."; return; }\n  const compact = query.replace(/\\s+/g, "");\n  const results = getAllItems().filter(item => [item.word,item.reading,item.meaning,CATEGORY_NAMES[item.category||"word"]].some(field => {\n    const n = normalizeSearchText(field); return n.includes(query) || n.replace(/\\s+/g, "").includes(compact);\n  }));\n  searchSummary.textContent = `검색 결과 ${results.length}개`;\n  if (!results.length) { searchResultList.innerHTML = '<div class="search-empty">일치하는 항목이 없습니다.</div>'; return; }\n  results.slice(0,200).forEach(item => {\n    const category=item.category||"word"; const row=document.createElement("button");\n    row.type="button"; row.className="search-result-item";\n    row.innerHTML=`<div><strong>${escapeHtml(item.word)}</strong><span class="result-reading">${escapeHtml(item.reading)}</span><span class="result-meaning">${escapeHtml(item.meaning)}</span></div><span class="result-category">${escapeHtml(CATEGORY_NAMES[category])}</span>`;\n    row.addEventListener("click",()=>{ currentCategory=category; studyMode="search"; startStudy([item]); });\n    searchResultList.appendChild(row);\n  });\n}\nopenSearchButton.addEventListener("click",()=>{ searchInput.value=""; searchResultList.innerHTML=""; searchSummary.textContent="검색어를 입력해 주세요."; showScreen("search"); setTimeout(()=>searchInput.focus(),50); });\ncloseSearchButton.addEventListener("click",()=>{ renderHome(); showScreen("home"); });\nclearSearchButton.addEventListener("click",()=>{ searchInput.value=""; renderSearchResults(); searchInput.focus(); });\nsearchInput.addEventListener("input",renderSearchResults);\n\ndocument.querySelectorAll(".category-book").forEach(button => {
   button.addEventListener("click", () => {
     currentCategory = button.dataset.category;
     renderChapterScreen();
@@ -637,5 +657,7 @@ exitStudyButton.addEventListener("click", returnHome);
 closeStudyButton.addEventListener("click", returnHome);
 completeHomeButton.addEventListener("click", returnHome);
 
+const removedDuplicateCount = removeSavedDuplicates();
 renderHome();
 showScreen("home");
+if (removedDuplicateCount > 0) setTimeout(() => alert(`기존 중복 항목 ${removedDuplicateCount}개를 자동으로 정리했습니다.`), 250);

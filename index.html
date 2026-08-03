@@ -17,6 +17,7 @@
           <p class="eyebrow">박도현의 일본어 공부장</p>
           <h1>목차</h1>
         </div>
+        <button id="openSearchButton" class="search-open-button" type="button" aria-label="검색 열기">⌕</button>
       </header>
 
       <div id="categoryList" class="category-list">
@@ -44,6 +45,24 @@
           <span id="reviewCategoryCount" class="book-count">0개</span>
         </button>
       </div>
+    </section>
+
+    <!-- 전체 검색 -->
+    <section id="searchScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeSearchButton" class="back-button" type="button">←</button>
+        <h2>전체 검색</h2>
+        <div></div>
+      </header>
+      <section class="search-panel">
+        <label class="search-box">
+          <span>⌕</span>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="한자·히라가나·한글 뜻 검색">
+          <button id="clearSearchButton" type="button" aria-label="검색어 지우기">×</button>
+        </label>
+        <p id="searchSummary" class="search-summary">검색어를 입력해 주세요.</p>
+        <div id="searchResultList" class="search-result-list"></div>
+      </section>
     </section>
 
     <!-- 장 목록 -->
