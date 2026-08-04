@@ -1,4 +1,4 @@
-// v11.4.1: force Safari and Chrome to load the newest app and Firebase code
+// v11.5: unresolved-only review screen with direct Firebase editing
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=1141";
+} from "./firebase.js?v=115";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -91,6 +91,7 @@ const screens = {
   study: document.getElementById("studyScreen"),
   complete: document.getElementById("completeScreen"),
   annoying: document.getElementById("annoyingScreen"),
+  unresolved: unresolvedScreen,
   search: document.getElementById("searchScreen"),
   random: document.getElementById("randomScreen")
 };
@@ -136,6 +137,11 @@ const addedBySelect = document.getElementById("addedBySelect");
 const cloudStatus = document.getElementById("cloudStatus");
 const repairExistingItemsButton = document.getElementById("repairExistingItemsButton");
 const repairExistingItemsStatus = document.getElementById("repairExistingItemsStatus");
+const openUnresolvedItemsButton = document.getElementById("openUnresolvedItemsButton");
+const unresolvedScreen = document.getElementById("unresolvedScreen");
+const closeUnresolvedButton = document.getElementById("closeUnresolvedButton");
+const unresolvedSummary = document.getElementById("unresolvedSummary");
+const unresolvedItemList = document.getElementById("unresolvedItemList");
 
 const studyTitle = document.getElementById("studyTitle");
 const currentNumber = document.getElementById("currentNumber");
@@ -1343,6 +1349,129 @@ function getMalformedItemRepairs(items = sharedItems) {
   return getMalformedItemRepairReport(items).repairs;
 }
 
+
+function renderUnresolvedItems() {
+  const report = getMalformedItemRepairReport();
+  const unresolvedItems = report.unresolved;
+
+  unresolvedSummary.textContent = unresolvedItems.length > 0
+    ? `남은 미확정 항목 ${unresolvedItems.length}개`
+    : "미확정 항목이 없습니다.";
+
+  unresolvedItemList.innerHTML = "";
+
+  if (unresolvedItems.length === 0) {
+    unresolvedItemList.innerHTML = `
+      <div class="empty-box">
+        자동 판별이 어려운 항목이 없습니다.<br>
+        모든 항목이 정상적으로 정리됐습니다.
+      </div>
+    `;
+    openUnresolvedItemsButton.hidden = true;
+    return;
+  }
+
+  unresolvedItems.forEach((item, index) => {
+    const row = document.createElement("article");
+    row.className = "unresolved-item-card";
+
+    row.innerHTML = `
+      <div class="unresolved-item-head">
+        <strong>${index + 1} / ${unresolvedItems.length}</strong>
+        <small>기존 저장 내용</small>
+      </div>
+
+      <div class="unresolved-original">
+        <span>${escapeHtml(item.word || "(비어 있음)")}</span>
+        <span>${escapeHtml(item.reading || "(비어 있음)")}</span>
+        <span>${escapeHtml(item.meaning || "(비어 있음)")}</span>
+      </div>
+
+      <form class="unresolved-edit-form">
+        <label>
+          일본어 한자·표현
+          <input name="word" required value="${escapeHtml(stripListNumber(item.word || ""))}">
+        </label>
+
+        <label>
+          읽는 법
+          <input name="reading" required value="${escapeHtml(stripOuterSeparators(item.reading || ""))}">
+        </label>
+
+        <label>
+          한국어 뜻
+          <input name="meaning" required value="${escapeHtml(stripOuterSeparators(item.meaning || ""))}">
+        </label>
+
+        <button class="primary-button" type="submit">수정해서 저장</button>
+      </form>
+    `;
+
+    const form = row.querySelector(".unresolved-edit-form");
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const formData = new FormData(form);
+      const word = String(formData.get("word") || "").trim();
+      const reading = String(formData.get("reading") || "").trim();
+      const meaning = String(formData.get("meaning") || "").trim();
+
+      if (!word || !reading || !meaning) {
+        alert("일본어, 읽는 법, 한국어 뜻을 모두 입력해 주세요.");
+        return;
+      }
+
+      const saveButton = form.querySelector('button[type="submit"]');
+      saveButton.disabled = true;
+      saveButton.textContent = "저장 중…";
+
+      try {
+        await updateSharedItem(item.id, {
+          ...item,
+          category: item.category || "word",
+          word,
+          reading,
+          meaning,
+          example: item.example || "",
+          addedBy: item.addedBy || "도현"
+        });
+
+        row.remove();
+
+        // Firebase 실시간 동기화가 반영될 때까지 잠깐 기다린 뒤 다시 표시합니다.
+        setTimeout(() => {
+          renderUnresolvedItems();
+        }, 400);
+      } catch (error) {
+        console.error("미확정 항목 수정 실패:", error);
+        alert("저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+        saveButton.disabled = false;
+        saveButton.textContent = "수정해서 저장";
+      }
+    });
+
+    unresolvedItemList.appendChild(row);
+  });
+}
+
+function updateUnresolvedButton() {
+  const unresolvedCount = getMalformedItemRepairReport().unresolved.length;
+  openUnresolvedItemsButton.hidden = unresolvedCount === 0;
+  openUnresolvedItemsButton.textContent = unresolvedCount > 0
+    ? `미확정 항목만 보기 (${unresolvedCount}개)`
+    : "미확정 항목만 보기";
+}
+
+openUnresolvedItemsButton.addEventListener("click", () => {
+  renderUnresolvedItems();
+  showScreen("unresolved");
+});
+
+closeUnresolvedButton.addEventListener("click", () => {
+  showScreen("add");
+});
+
 async function repairMalformedCloudItems(items = sharedItems, showResult = false) {
   if (cloudRepairInProgress) return 0;
 
@@ -1382,6 +1511,7 @@ async function repairMalformedCloudItems(items = sharedItems, showResult = false
     repairExistingItemsStatus.textContent = unresolvedCount > 0
       ? `${repairedCount}개 복구 완료 · 미확정 ${unresolvedCount}개`
       : `${repairedCount}개 복구 완료`;
+    updateUnresolvedButton();
     if (showResult) {
       alert(`${repairedCount}개 항목을 정상 형식으로 복구했습니다.${unresolvedText}`);
     }
@@ -1445,10 +1575,21 @@ async function startCloudSync() {
         cloudConnected = true;
         setCloudStatus("공유 연결됨", "connected");
 
-        const repairCount = getMalformedItemRepairs(items).length;
+        const repairReport = getMalformedItemRepairReport(items);
+        const repairCount = repairReport.repairs.length;
+        const unresolvedCount = repairReport.unresolved.length;
+
         repairExistingItemsStatus.textContent = repairCount > 0
-          ? `복구가 필요한 기존 항목 ${repairCount}개가 있습니다.`
-          : "기존 저장 항목이 정상입니다.";
+          ? `복구 가능한 항목 ${repairCount}개 · 미확정 ${unresolvedCount}개`
+          : unresolvedCount > 0
+            ? `자동 판별이 어려운 항목 ${unresolvedCount}개가 남아 있습니다.`
+            : "기존 저장 항목이 정상입니다.";
+
+        updateUnresolvedButton();
+
+        if (!screens.unresolved.hidden) {
+          renderUnresolvedItems();
+        }
 
         renderHome();
 

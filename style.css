@@ -894,3 +894,72 @@ body.dialog-open {
   min-height: 20px;
   margin: 0;
 }
+
+
+.unresolved-guide {
+  margin: 0 0 18px;
+}
+
+.repair-summary {
+  margin-bottom: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+.unresolved-button {
+  margin-top: 2px;
+}
+
+.unresolved-list {
+  display: grid;
+  gap: 18px;
+}
+
+.unresolved-item-card {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  padding: 18px;
+}
+
+.unresolved-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.unresolved-item-head strong {
+  color: var(--teal);
+}
+
+.unresolved-item-head small {
+  color: var(--muted);
+}
+
+.unresolved-original {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.unresolved-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.unresolved-edit-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.unresolved-edit-form input {
+  width: 100%;
+}

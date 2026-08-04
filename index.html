@@ -165,6 +165,9 @@
           <p class="help">번호·하이픈 때문에 잘못 저장된 기존 항목을 한 번에 바로잡습니다.</p>
         </div>
         <button id="repairExistingItemsButton" class="secondary-button" type="button">기존 단어 검사·복구</button>
+        <button id="openUnresolvedItemsButton" class="secondary-button unresolved-button" type="button" hidden>
+          미확정 항목만 보기
+        </button>
         <p id="repairExistingItemsStatus" class="help repair-status"></p>
       </section>
 
@@ -192,6 +195,25 @@
         <div class="section-title"><h2>직접 추가한 항목</h2></div>
         <div id="recentWordList" class="list"></div>
       </section>
+    </section>
+
+    <!-- 미확정 복구 항목 -->
+    <section id="unresolvedScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeUnresolvedButton" class="back-button" type="button">←</button>
+        <div>
+          <p class="eyebrow">자동 판별이 어려운 항목</p>
+          <h2>미확정 항목 수정</h2>
+        </div>
+        <div></div>
+      </header>
+
+      <p class="help unresolved-guide">
+        아래 항목만 직접 확인해서 고치면 됩니다. 저장하면 다음 항목으로 자동 이동합니다.
+      </p>
+
+      <div id="unresolvedSummary" class="repair-summary"></div>
+      <div id="unresolvedItemList" class="list unresolved-list"></div>
     </section>
 
     <!-- 공부 -->
@@ -284,6 +306,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=1141"></script>
+  <script type="module" src="app.js?v=115"></script>
 </body>
 </html>
