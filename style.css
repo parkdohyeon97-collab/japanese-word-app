@@ -1209,3 +1209,43 @@ body.dialog-open {
     text-align: center;
   }
 }
+
+
+.shared-word-card {
+  position: relative;
+  padding-top: 54px;
+}
+
+.shared-card-edit-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  max-width: calc(100% - 24px);
+}
+
+.shared-item-edit-button {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid rgba(110, 185, 204, 0.38);
+  border-radius: 14px;
+  background: rgba(110, 185, 204, 0.12);
+  color: var(--teal);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.shared-item-edit-button:active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) {
+  .shared-item-edit-button:hover {
+    background: rgba(110, 185, 204, 0.22);
+  }
+}

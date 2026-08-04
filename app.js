@@ -1,4 +1,4 @@
-// v14.1: automatically repair swapped kanji and kana fields
+// v14.3: add edit pencil buttons to every shared-list item
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=141";
+} from "./firebase.js?v=143";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -348,6 +348,10 @@ function normalizeImportedItem(item) {
 
   const cleanedWord = stripListNumber(original.word);
   const cleanedReading = original.reading;
+  const cleanedMeaning = String(original.meaning || "")
+    .trim()
+    .replace(/^[\s\-–—―·•・:：]+/, "")
+    .trim();
 
   // 예전 데이터 중 한자와 읽는 법이 서로 뒤집혀 저장된 항목 자동 복구
   // 예: word="かくす", reading="隠す" → word="隠す", reading="かくす"
@@ -359,13 +363,15 @@ function normalizeImportedItem(item) {
     return {
       ...original,
       word: cleanedReading,
-      reading: cleanedWord
+      reading: cleanedWord,
+      meaning: cleanedMeaning
     };
   }
 
   return {
     ...original,
-    word: cleanedWord
+    word: cleanedWord,
+    meaning: cleanedMeaning
   };
 }
 
@@ -384,6 +390,8 @@ function getCategoryItems(category) {
 
 
 let currentSharedOwner = "all";
+let activeEditItem = null;
+let activeEditSource = "study";
 
 function normalizeOwnerName(value) {
   const name = String(value || "").trim();
@@ -529,9 +537,32 @@ function renderSharedWordList() {
         </div>
       `;
 
+    const editableItems = item.sourceItems.filter((sourceItem, index, array) =>
+      array.findIndex(candidate => candidate.id === sourceItem.id) === index
+    );
+
+    const editButtonsHtml = editableItems.map(sourceItem => {
+      const sourceOwner = normalizeOwnerName(sourceItem.addedBy);
+      const label = editableItems.length > 1 ? `✏️ ${sourceOwner}` : "✏️";
+
+      return `
+        <button
+          class="shared-item-edit-button"
+          type="button"
+          data-shared-edit-id="${escapeHtml(sourceItem.id)}"
+          aria-label="${escapeHtml(sourceOwner)} 항목 수정"
+          title="${escapeHtml(sourceOwner)} 항목 수정"
+        >${label}</button>
+      `;
+    }).join("");
+
     const card = document.createElement("article");
     card.className = "shared-word-card";
     card.innerHTML = `
+      <div class="shared-card-edit-actions">
+        ${editButtonsHtml}
+      </div>
+
       <div class="shared-word-main">
         <strong>${escapeHtml(item.word)}</strong>
         <span>${escapeHtml(item.reading)}</span>
@@ -544,6 +575,21 @@ function renderSharedWordList() {
         ${overlapText}
       </div>
     `;
+
+    card.querySelectorAll("[data-shared-edit-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        const sourceItem = sharedItems.find(candidate =>
+          candidate.id === button.dataset.sharedEditId
+        );
+
+        if (!sourceItem) {
+          alert("수정할 항목을 찾지 못했습니다.");
+          return;
+        }
+
+        openItemEditor(sourceItem, "sharedList");
+      });
+    });
 
     sharedWordList.appendChild(card);
   });
@@ -1289,13 +1335,14 @@ meaningButton.addEventListener("click", () => {
 });
 
 
-function openCurrentItemEditor() {
-  const item = getCurrentItem();
-
+function openItemEditor(item, source = "study") {
   if (!item || !item.shared) {
     alert("직접 추가한 항목만 수정할 수 있습니다.");
     return;
   }
+
+  activeEditItem = item;
+  activeEditSource = source;
 
   editWordInput.value = item.word || "";
   editReadingInput.value = item.reading || "";
@@ -1307,9 +1354,15 @@ function openCurrentItemEditor() {
   setTimeout(() => editWordInput.focus(), 50);
 }
 
+function openCurrentItemEditor() {
+  openItemEditor(getCurrentItem(), "study");
+}
+
 function closeCurrentItemEditor() {
   editItemDialog.hidden = true;
   document.body.classList.remove("dialog-open");
+  activeEditItem = null;
+  activeEditSource = "study";
 }
 
 editCurrentButton.addEventListener("click", openCurrentItemEditor);
@@ -1328,7 +1381,7 @@ document.addEventListener("keydown", event => {
 editItemForm.addEventListener("submit", async event => {
   event.preventDefault();
 
-  const item = getCurrentItem();
+  const item = activeEditItem || getCurrentItem();
   if (!item || !item.shared) return;
 
   const word = editWordInput.value.trim();
@@ -1372,13 +1425,21 @@ editItemForm.addEventListener("submit", async event => {
       meaning
     };
 
-    currentItems[currentIndex] = updatedItem;
-    nextRoundItems = nextRoundItems.map(roundItem =>
-      roundItem.id === item.id ? updatedItem : roundItem
-    );
+    if (activeEditSource === "study") {
+      currentItems[currentIndex] = updatedItem;
+      nextRoundItems = nextRoundItems.map(roundItem =>
+        roundItem.id === item.id ? updatedItem : roundItem
+      );
+    }
 
+    const editSource = activeEditSource;
     closeCurrentItemEditor();
-    showCurrentItem();
+
+    if (editSource === "sharedList") {
+      renderSharedWordList();
+    } else {
+      showCurrentItem();
+    }
   } catch (error) {
     console.error(error);
     alert("수정하지 못했습니다. 인터넷 연결을 확인해 주세요.");
