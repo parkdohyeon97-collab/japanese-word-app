@@ -184,11 +184,18 @@
       </form>
 
       <section id="bulkPanel" class="panel" hidden>
-        <p class="help">한 줄에 하나씩 띄어쓰기로 입력하면 됩니다.</p>
-        <pre>食堂 しょくどう 식당
-途端 とたん ~하자마자 바로 그 순간</pre>
+        <p class="help">3줄·하이픈·파이프 형식을 모두 자동 인식합니다.</p>
+        <pre>勝ち目
+かちめ
+승산
+
+分解 - ぶんかい - 분해
+
+競争|きょうそう|경쟁</pre>
         <textarea id="bulkInput" rows="14" placeholder="여기에 여러 개 붙여넣기"></textarea>
-        <button id="saveBulkButton" class="primary-button" type="button">자동 분석해서 저장</button>
+        <button id="previewBulkButton" class="secondary-button" type="button">먼저 확인하기</button>
+        <div id="bulkPreview" class="bulk-preview" hidden></div>
+        <button id="saveBulkButton" class="primary-button" type="button" disabled>확인한 항목 저장하기</button>
       </section>
 
       <section class="section-block">
@@ -306,6 +313,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=1151"></script>
+  <script type="module" src="app.js?v=120"></script>
 </body>
 </html>

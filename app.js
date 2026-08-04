@@ -1,4 +1,4 @@
-// v11.5.1: fix startup crash caused by unresolved screen reference order
+// v12.0: multi-format bulk import with preview and detailed errors
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=1151";
+} from "./firebase.js?v=120";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -132,6 +132,8 @@ const readingInput = document.getElementById("readingInput");
 const meaningInput = document.getElementById("meaningInput");
 const bulkInput = document.getElementById("bulkInput");
 const saveBulkButton = document.getElementById("saveBulkButton");
+const previewBulkButton = document.getElementById("previewBulkButton");
+const bulkPreview = document.getElementById("bulkPreview");
 const recentWordList = document.getElementById("recentWordList");
 const addedBySelect = document.getElementById("addedBySelect");
 const cloudStatus = document.getElementById("cloudStatus");
@@ -588,96 +590,160 @@ singleForm.addEventListener("submit", async event => {
   }
 });
 
-function parseBulkItems(rawText) {
-  const lines = rawText
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  const parsed = [];
-  let errorCount = 0;
-
-  lines.forEach(line => {
-    const withoutNumber = stripListNumber(line);
-
-    // 지원 형식:
-    // 39. 분해 - ぶんかい - 分解
-    // 分解 - ぶんかい - 분해
-    // 分解 / ぶんかい / 분해
-    // 分解 ぶんかい 분해
-    let parts = withoutNumber
-      .split(/\s+(?:-|–|—|\||\/|·|・)\s+/)
-      .map(stripOuterSeparators)
-      .filter(Boolean);
-
-    if (parts.length < 3) {
-      parts = withoutNumber.split(/\s+/).map(stripOuterSeparators).filter(Boolean);
-    }
-
-    if (parts.length < 3) {
-      errorCount += 1;
-      return;
-    }
-
-    const mapped = mapThreeParts(parts);
-    if (!mapped.word || !mapped.reading || !mapped.meaning) {
-      errorCount += 1;
-      return;
-    }
-
-    parsed.push(mapped);
-  });
-
-  return { items: parsed, errorCount };
+function isStandaloneListNumber(line) {
+  return /^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(String(line || ""));
 }
 
+function splitDelimitedLine(line) {
+  const stripped = stripListNumber(line);
+  const pipe = stripped.split(/\s*\|\s*/).map(stripOuterSeparators).filter(Boolean);
+  if (pipe.length >= 3) return pipe;
+  const dash = stripped.split(/\s+(?:-|–|—)\s+/).map(stripOuterSeparators).filter(Boolean);
+  if (dash.length >= 3) return dash;
+  const slash = stripped.split(/\s*\/\s*/).map(stripOuterSeparators).filter(Boolean);
+  if (slash.length >= 3) return slash;
+  return null;
+}
+
+function parseBulkItems(rawText) {
+  const lines = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
+    .map((line, index) => ({ text: line.trim(), lineNumber: index + 1 }))
+    .filter(line => line.text);
+
+  const items = [];
+  const errors = [];
+  let cursor = 0;
+
+  while (cursor < lines.length) {
+    const current = lines[cursor];
+
+    if (isStandaloneListNumber(current.text)) {
+      cursor += 1;
+      continue;
+    }
+
+    const delimited = splitDelimitedLine(current.text);
+    if (delimited) {
+      const mapped = mapThreeParts(delimited);
+      if (mapped.word && mapped.reading && mapped.meaning) {
+        items.push(mapped);
+      } else {
+        errors.push({ lineNumber: current.lineNumber, text: current.text, reason: "세 칸을 구분하지 못했습니다." });
+      }
+      cursor += 1;
+      continue;
+    }
+
+    const group = [];
+    let scan = cursor;
+    while (scan < lines.length && group.length < 3) {
+      if (isStandaloneListNumber(lines[scan].text)) {
+        scan += 1;
+        continue;
+      }
+      group.push(lines[scan]);
+      scan += 1;
+    }
+
+    if (group.length < 3) {
+      errors.push({ lineNumber: current.lineNumber, text: current.text, reason: "3줄 형식이 완성되지 않았습니다." });
+      cursor += 1;
+      continue;
+    }
+
+    const mapped = mapThreeParts(group.map(entry => stripOuterSeparators(stripListNumber(entry.text))));
+    if (mapped.word && mapped.reading && mapped.meaning) {
+      items.push(mapped);
+      cursor = scan;
+    } else {
+      errors.push({
+        lineNumber: group[0].lineNumber,
+        text: group.map(entry => entry.text).join(" / "),
+        reason: "일본어·읽는 법·뜻을 구분하지 못했습니다."
+      });
+      cursor += 1;
+    }
+  }
+
+  return { items, errors };
+}
+
+let lastBulkPreview = { items: [], errors: [] };
+
+function renderBulkPreview(result) {
+  lastBulkPreview = result;
+  bulkPreview.hidden = false;
+
+  const preview = result.items.slice(0, 30).map((item, index) => `
+    <div class="bulk-preview-item">
+      <strong>${index + 1}. ${escapeHtml(item.word)}</strong>
+      <span>${escapeHtml(item.reading)}</span>
+      <span>${escapeHtml(item.meaning)}</span>
+    </div>
+  `).join("");
+
+  const errorHtml = result.errors.length ? `
+    <details class="bulk-error-details">
+      <summary>형식 오류 ${result.errors.length}개 보기</summary>
+      ${result.errors.map(error => `
+        <div class="bulk-error-item">
+          <strong>${error.lineNumber}번째 줄</strong>
+          <span>${escapeHtml(error.text)}</span>
+          <small>${escapeHtml(error.reason)}</small>
+        </div>
+      `).join("")}
+    </details>
+  ` : '<p class="bulk-ok-message">형식 오류 없음</p>';
+
+  bulkPreview.innerHTML = `
+    <div class="bulk-preview-summary">
+      <strong>인식 성공 ${result.items.length}개</strong>
+      <span>형식 오류 ${result.errors.length}개</span>
+    </div>
+    <div class="bulk-preview-list">${preview || '<p class="help">인식된 항목이 없습니다.</p>'}</div>
+    ${errorHtml}
+  `;
+
+  saveBulkButton.disabled = result.items.length === 0;
+}
+
+previewBulkButton.addEventListener("click", () => {
+  if (!bulkInput.value.trim()) {
+    alert("먼저 단어를 붙여넣어 주세요.");
+    return;
+  }
+  renderBulkPreview(parseBulkItems(bulkInput.value));
+});
+
+bulkInput.addEventListener("input", () => {
+  lastBulkPreview = { items: [], errors: [] };
+  bulkPreview.hidden = true;
+  bulkPreview.innerHTML = "";
+  saveBulkButton.disabled = true;
+});
+
 saveBulkButton.addEventListener("click", async () => {
-  const raw = bulkInput.value.trim();
-
-  if (!raw) {
-    alert("추가할 내용을 붙여넣어 주세요.");
-    return;
-  }
-
   if (!cloudConnected) {
-    alert("공유 단어장 연결이 끝난 뒤 다시 눌러 주세요.");
+    alert("공유 연결이 끝난 뒤 다시 눌러 주세요.");
     return;
   }
 
-  const parsed = parseBulkItems(raw);
-
-  if (parsed.items.length === 0) {
-    alert("항목을 찾지 못했습니다.");
+  if (lastBulkPreview.items.length === 0) {
+    alert("먼저 '먼저 확인하기'를 눌러 주세요.");
     return;
   }
 
-  const preview = parsed.items
-    .slice(0, 5)
-    .map(item => `${item.word} / ${item.reading} / ${item.meaning}`)
-    .join("\n");
-
-  const moreText = parsed.items.length > 5
-    ? `\n외 ${parsed.items.length - 5}개`
-    : "";
-
-  if (!confirm(`${parsed.items.length}개를 찾았습니다.\n\n${preview}${moreText}\n\n공유 단어장에 저장할까요?`)) {
-    return;
-  }
-
-  let duplicate = 0;
   const existingKeys = new Set(
     getCategoryItems(currentCategory).map(item => normalizeDuplicateText(item.word))
   );
 
+  let duplicateCount = 0;
   const itemsToSave = [];
 
-  parsed.items.forEach(item => {
+  lastBulkPreview.items.forEach(item => {
     const key = normalizeDuplicateText(item.word);
-
     if (!key || existingKeys.has(key)) {
-      duplicate += 1;
+      duplicateCount += 1;
       return;
     }
 
@@ -689,16 +755,30 @@ saveBulkButton.addEventListener("click", async () => {
     });
   });
 
+  if (itemsToSave.length === 0) {
+    alert(`새로 저장할 항목이 없습니다.\n중복 제외 ${duplicateCount}개`);
+    return;
+  }
+
+  previewBulkButton.disabled = true;
+  saveBulkButton.disabled = true;
+  saveBulkButton.textContent = "저장 중…";
+
   try {
-    if (itemsToSave.length > 0) {
-      await addSharedItems(itemsToSave);
-    }
+    await addSharedItems(itemsToSave);
+    alert(`공유 저장 ${itemsToSave.length}개\n중복 제외 ${duplicateCount}개\n형식 오류 ${lastBulkPreview.errors.length}개`);
 
     bulkInput.value = "";
-    alert(`공유 저장 ${itemsToSave.length}개\n중복 제외 ${duplicate}개\n형식 오류 ${parsed.errorCount}개`);
+    bulkPreview.hidden = true;
+    bulkPreview.innerHTML = "";
+    lastBulkPreview = { items: [], errors: [] };
   } catch (error) {
     console.error(error);
-    alert("일부 또는 전체 항목을 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+    alert("저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  } finally {
+    previewBulkButton.disabled = false;
+    saveBulkButton.disabled = true;
+    saveBulkButton.textContent = "확인한 항목 저장하기";
   }
 });
 

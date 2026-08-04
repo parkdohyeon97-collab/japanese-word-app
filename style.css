@@ -963,3 +963,16 @@ body.dialog-open {
 .unresolved-edit-form input {
   width: 100%;
 }
+
+.bulk-preview{display:grid;gap:16px;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:18px;background:rgba(0,0,0,.14)}
+.bulk-preview-summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bulk-preview-summary strong{color:var(--teal)}
+.bulk-preview-list{display:grid;gap:10px;max-height:360px;overflow-y:auto}
+.bulk-preview-item{display:grid;grid-template-columns:minmax(100px,1.2fr) minmax(90px,1fr) minmax(120px,1.4fr);gap:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);overflow-wrap:anywhere}
+.bulk-preview-item span{color:var(--muted)}
+.bulk-error-details{border-top:1px solid var(--line);padding-top:12px}
+.bulk-error-details summary{cursor:pointer;color:#e4c15e;font-weight:800}
+.bulk-error-item{display:grid;gap:5px;margin-top:12px;padding:12px;border-radius:12px;background:rgba(228,193,94,.08)}
+.bulk-error-item small{color:#e4c15e}
+.bulk-ok-message{margin:0;color:var(--teal);font-weight:800}
+@media(max-width:640px){.bulk-preview-item{grid-template-columns:1fr}}
