@@ -238,6 +238,7 @@
         <span id="wrongCountBadge">공부하겠음 0회</span>
         <div class="study-tool-buttons">
           <button id="editCurrentButton" class="edit-current-button" type="button" aria-label="현재 항목 수정" hidden>✏️</button>
+          <button id="ttsSettingsButton" class="tts-settings-button" type="button" aria-label="ElevenLabs 목소리 설정">⚙️</button>
           <button id="soundButton" class="sound-button" type="button" aria-label="발음 듣기">🔊</button>
         </div>
       </div>
@@ -257,6 +258,46 @@
         <button id="knowButton" class="choice-button know" type="button">✓ 알고 있음</button>
       </div>
     </section>
+
+    <dialog id="ttsSettingsDialog" class="edit-dialog tts-dialog">
+      <form id="ttsSettingsForm" method="dialog" class="dialog-card">
+        <div class="dialog-header">
+          <h2>ElevenLabs 목소리 설정</h2>
+          <button id="closeTtsSettingsButton" type="button" aria-label="닫기">×</button>
+        </div>
+
+        <p class="help">API 키는 이 기기에만 저장되며 GitHub에는 올라가지 않습니다.</p>
+
+        <label>
+          ElevenLabs API 키
+          <input id="elevenLabsApiKeyInput" type="password" autocomplete="off" placeholder="sk_...">
+        </label>
+
+        <button id="loadElevenLabsVoicesButton" class="secondary-button" type="button">목소리 불러오기</button>
+
+        <label>
+          사용할 목소리
+          <select id="elevenLabsVoiceSelect">
+            <option value="">먼저 목소리를 불러오세요</option>
+          </select>
+        </label>
+
+        <label>
+          음성 모델
+          <select id="elevenLabsModelSelect">
+            <option value="eleven_flash_v2_5">Flash v2.5 · 빠름</option>
+            <option value="eleven_multilingual_v2">Multilingual v2 · 자연스러움</option>
+          </select>
+        </label>
+
+        <p id="ttsSettingsStatus" class="help"></p>
+
+        <div class="dialog-actions">
+          <button id="testElevenLabsVoiceButton" class="secondary-button" type="button">테스트</button>
+          <button class="primary-button" type="submit">저장</button>
+        </div>
+      </form>
+    </dialog>
 
     <!-- 완료 -->
     <section id="completeScreen" class="complete-screen" hidden>
@@ -313,6 +354,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=121"></script>
+  <script type="module" src="app.js?v=130"></script>
 </body>
 </html>

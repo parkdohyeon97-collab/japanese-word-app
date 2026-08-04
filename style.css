@@ -1013,3 +1013,46 @@ body.dialog-open {
   width: 100%;
   min-height: 48px;
 }
+
+
+.tts-settings-button {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 23px;
+}
+
+.tts-dialog .dialog-card {
+  width: min(92vw, 560px);
+}
+
+.tts-dialog label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.tts-dialog input,
+.tts-dialog select {
+  width: 100%;
+  min-height: 52px;
+}
+
+.tts-dialog .dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .tts-settings-button {
+    width: 50px;
+    height: 50px;
+  }
+  .tts-dialog .dialog-actions {
+    grid-template-columns: 1fr;
+  }
+}

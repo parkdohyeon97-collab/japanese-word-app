@@ -1,4 +1,4 @@
-// v12.1: editable bulk preview before Firebase save
+// v13.0: ElevenLabs TTS with device-only key storage, voice picker, cache and browser fallback
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=121";
+} from "./firebase.js?v=130";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -155,6 +155,16 @@ const meaningElement = document.getElementById("meaning");
 const wrongCountBadge = document.getElementById("wrongCountBadge");
 const soundTouchArea = document.getElementById("soundTouchArea");
 const soundButton = document.getElementById("soundButton");
+const ttsSettingsButton = document.getElementById("ttsSettingsButton");
+const ttsSettingsDialog = document.getElementById("ttsSettingsDialog");
+const ttsSettingsForm = document.getElementById("ttsSettingsForm");
+const closeTtsSettingsButton = document.getElementById("closeTtsSettingsButton");
+const elevenLabsApiKeyInput = document.getElementById("elevenLabsApiKeyInput");
+const loadElevenLabsVoicesButton = document.getElementById("loadElevenLabsVoicesButton");
+const elevenLabsVoiceSelect = document.getElementById("elevenLabsVoiceSelect");
+const elevenLabsModelSelect = document.getElementById("elevenLabsModelSelect");
+const testElevenLabsVoiceButton = document.getElementById("testElevenLabsVoiceButton");
+const ttsSettingsStatus = document.getElementById("ttsSettingsStatus");
 const editCurrentButton = document.getElementById("editCurrentButton");
 const editItemDialog = document.getElementById("editItemDialog");
 const closeEditDialogButton = document.getElementById("closeEditDialogButton");
@@ -1211,21 +1221,37 @@ deleteCurrentItemButton.addEventListener("click", async () => {
   }
 });
 
+const ELEVENLABS_SETTINGS_KEY = "jpAppElevenLabsV13";
+const elevenAudioCache = new Map();
+let activeElevenAudio = null;
+
+function getElevenLabsSettings() {
+  try {
+    return {
+      apiKey: "",
+      voiceId: "",
+      voiceName: "",
+      modelId: "eleven_flash_v2_5",
+      ...JSON.parse(localStorage.getItem(ELEVENLABS_SETTINGS_KEY) || "{}")
+    };
+  } catch {
+    return { apiKey: "", voiceId: "", voiceName: "", modelId: "eleven_flash_v2_5" };
+  }
+}
+
+function saveElevenLabsSettings(settings) {
+  localStorage.setItem(ELEVENLABS_SETTINGS_KEY, JSON.stringify(settings));
+}
+
 function getPreferredJapaneseVoice() {
-  const voices = window.speechSynthesis.getVoices();
+  const voices = window.speechSynthesis?.getVoices?.() || [];
   const japaneseVoices = voices.filter(voice =>
     String(voice.lang || "").toLowerCase().startsWith("ja")
   );
 
   const preferredNames = [
-    "otoya premium",
-    "otoya enhanced",
-    "otoya",
-    "オトヤ",
-    "kyoko premium",
-    "kyoko enhanced",
-    "kyoko",
-    "キョウコ"
+    "otoya premium", "otoya enhanced", "otoya", "オトヤ",
+    "kyoko premium", "kyoko enhanced", "kyoko", "キョウコ"
   ];
 
   for (const preferredName of preferredNames) {
@@ -1238,26 +1264,205 @@ function getPreferredJapaneseVoice() {
   return japaneseVoices.find(voice => voice.default) || japaneseVoices[0] || null;
 }
 
-function playSound() {
+function playBrowserJapanese(text) {
   if (!("speechSynthesis" in window)) return;
-
-  const item = getCurrentItem();
-  if (!item) return;
-
   window.speechSynthesis.cancel();
-
-  // 한자를 포함한 실제 표기를 읽히면 일본어 단어의 억양이 더 자연스러운 경우가 많습니다.
-  const speechText = String(item.word || item.reading || "").trim();
-  const speech = new SpeechSynthesisUtterance(speechText);
-
+  const speech = new SpeechSynthesisUtterance(text);
   speech.voice = getPreferredJapaneseVoice();
   speech.lang = "ja-JP";
   speech.rate = 0.92;
   speech.pitch = 1;
   speech.volume = 1;
-
   window.speechSynthesis.speak(speech);
 }
+
+async function requestElevenLabsAudio(text, settings) {
+  const cacheKey = `${settings.voiceId}::${settings.modelId}::${text}`;
+  if (elevenAudioCache.has(cacheKey)) return elevenAudioCache.get(cacheKey);
+
+  const response = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(settings.voiceId)}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "xi-api-key": settings.apiKey
+      },
+      body: JSON.stringify({
+        text,
+        model_id: settings.modelId,
+        language_code: "ja",
+        voice_settings: {
+          stability: 0.55,
+          similarity_boost: 0.78,
+          style: 0.08,
+          use_speaker_boost: true,
+          speed: 0.92
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    let detail = "";
+    try { detail = JSON.stringify(await response.json()); } catch { detail = await response.text(); }
+    throw new Error(`ElevenLabs ${response.status}: ${detail}`);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  elevenAudioCache.set(cacheKey, objectUrl);
+  return objectUrl;
+}
+
+async function playElevenLabsText(text, { allowFallback = true } = {}) {
+  const settings = getElevenLabsSettings();
+
+  if (!settings.apiKey || !settings.voiceId) {
+    if (allowFallback) {
+      playBrowserJapanese(text);
+      ttsSettingsStatus.textContent = "ElevenLabs 설정이 없어 아이폰 기본 음성으로 재생했습니다.";
+    }
+    return false;
+  }
+
+  try {
+    soundButton.disabled = true;
+    soundButton.textContent = "…";
+
+    if (activeElevenAudio) {
+      activeElevenAudio.pause();
+      activeElevenAudio.currentTime = 0;
+    }
+
+    const audioUrl = await requestElevenLabsAudio(text, settings);
+    activeElevenAudio = new Audio(audioUrl);
+    activeElevenAudio.preload = "auto";
+    await activeElevenAudio.play();
+    return true;
+  } catch (error) {
+    console.error("ElevenLabs 재생 실패:", error);
+    if (allowFallback) {
+      playBrowserJapanese(text);
+      alert("ElevenLabs 음성을 불러오지 못해서 아이폰 기본 음성으로 재생했습니다.\n설정의 API 키와 목소리를 확인해 주세요.");
+    }
+    return false;
+  } finally {
+    soundButton.disabled = false;
+    soundButton.textContent = "🔊";
+  }
+}
+
+async function playSound() {
+  const item = getCurrentItem();
+  if (!item) return;
+  const speechText = String(item.word || item.reading || "").trim();
+  if (!speechText) return;
+  await playElevenLabsText(speechText);
+}
+
+function openTtsSettings() {
+  const settings = getElevenLabsSettings();
+  elevenLabsApiKeyInput.value = settings.apiKey || "";
+  elevenLabsModelSelect.value = settings.modelId || "eleven_flash_v2_5";
+  elevenLabsVoiceSelect.innerHTML = settings.voiceId
+    ? `<option value="${escapeHtml(settings.voiceId)}">${escapeHtml(settings.voiceName || settings.voiceId)}</option>`
+    : '<option value="">먼저 목소리를 불러오세요</option>';
+  ttsSettingsStatus.textContent = settings.voiceId
+    ? `현재 목소리: ${settings.voiceName || settings.voiceId}`
+    : "API 키를 넣고 목소리 불러오기를 누르세요.";
+  ttsSettingsDialog.showModal();
+}
+
+async function loadElevenLabsVoices() {
+  const apiKey = elevenLabsApiKeyInput.value.trim();
+  if (!apiKey) {
+    alert("ElevenLabs API 키를 먼저 붙여넣어 주세요.");
+    return;
+  }
+
+  loadElevenLabsVoicesButton.disabled = true;
+  loadElevenLabsVoicesButton.textContent = "불러오는 중…";
+  ttsSettingsStatus.textContent = "목소리 목록을 불러오고 있습니다.";
+
+  try {
+    const response = await fetch("https://api.elevenlabs.io/v1/voices", {
+      headers: { "xi-api-key": apiKey }
+    });
+    if (!response.ok) throw new Error(`목소리 조회 실패 (${response.status})`);
+
+    const data = await response.json();
+    const voices = Array.isArray(data.voices) ? data.voices : [];
+    const saved = getElevenLabsSettings();
+
+    elevenLabsVoiceSelect.innerHTML = voices.map(voice => {
+      const labels = voice.labels || {};
+      const details = [labels.gender, labels.age, labels.accent, labels.description]
+        .filter(Boolean).join(" · ");
+      return `<option value="${escapeHtml(voice.voice_id)}" ${voice.voice_id === saved.voiceId ? "selected" : ""}>${escapeHtml(voice.name)}${details ? ` · ${escapeHtml(details)}` : ""}</option>`;
+    }).join("");
+
+    if (!voices.length) throw new Error("사용 가능한 목소리가 없습니다.");
+    ttsSettingsStatus.textContent = `${voices.length}개 목소리를 불러왔습니다. 남성 목소리를 골라 테스트해 보세요.`;
+  } catch (error) {
+    console.error(error);
+    ttsSettingsStatus.textContent = "불러오지 못했습니다. API 키 권한에서 Text to Speech와 Voices Read를 확인해 주세요.";
+    alert("목소리를 불러오지 못했습니다. API 키와 권한을 확인해 주세요.");
+  } finally {
+    loadElevenLabsVoicesButton.disabled = false;
+    loadElevenLabsVoicesButton.textContent = "목소리 불러오기";
+  }
+}
+
+ttsSettingsButton.addEventListener("click", openTtsSettings);
+closeTtsSettingsButton.addEventListener("click", () => ttsSettingsDialog.close());
+loadElevenLabsVoicesButton.addEventListener("click", loadElevenLabsVoices);
+
+ttsSettingsForm.addEventListener("submit", event => {
+  event.preventDefault();
+  const selectedOption = elevenLabsVoiceSelect.selectedOptions[0];
+  const settings = {
+    apiKey: elevenLabsApiKeyInput.value.trim(),
+    voiceId: elevenLabsVoiceSelect.value,
+    voiceName: selectedOption?.textContent || "",
+    modelId: elevenLabsModelSelect.value
+  };
+
+  if (!settings.apiKey || !settings.voiceId) {
+    alert("API 키와 목소리를 모두 선택해 주세요.");
+    return;
+  }
+
+  saveElevenLabsSettings(settings);
+  ttsSettingsDialog.close();
+  alert("ElevenLabs 목소리 설정을 저장했습니다.");
+});
+
+testElevenLabsVoiceButton.addEventListener("click", async () => {
+  const selectedOption = elevenLabsVoiceSelect.selectedOptions[0];
+  const temporarySettings = {
+    apiKey: elevenLabsApiKeyInput.value.trim(),
+    voiceId: elevenLabsVoiceSelect.value,
+    voiceName: selectedOption?.textContent || "",
+    modelId: elevenLabsModelSelect.value
+  };
+
+  if (!temporarySettings.apiKey || !temporarySettings.voiceId) {
+    alert("API 키를 입력하고 목소리를 선택해 주세요.");
+    return;
+  }
+
+  const previousSettings = getElevenLabsSettings();
+  saveElevenLabsSettings(temporarySettings);
+  testElevenLabsVoiceButton.disabled = true;
+  testElevenLabsVoiceButton.textContent = "재생 중…";
+  const success = await playElevenLabsText("こんにちは。日本語の勉強を始めましょう。", { allowFallback: false });
+  if (!success) alert("테스트에 실패했습니다. 다른 목소리나 모델을 선택해 보세요.");
+  saveElevenLabsSettings(previousSettings);
+  testElevenLabsVoiceButton.disabled = false;
+  testElevenLabsVoiceButton.textContent = "테스트";
+});
+
 soundButton.addEventListener("click", playSound);
 soundTouchArea.addEventListener("click", playSound);
 
