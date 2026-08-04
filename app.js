@@ -1,4 +1,4 @@
-// v11.3: explicit Firebase migration button for repairing previously malformed bulk imports
+// v11.4: robust repair for numbered Korean-reading-kanji imports without blank Firebase writes
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -270,18 +270,48 @@ function normalizeImportedItem(item) {
     meaning: stripOuterSeparators(item.meaning)
   };
 
-  // 예전 일괄입력에서 "39. 분해 - ぶんかい - 分解"가
-  // word=39., reading=분해, meaning="- ぶんかい - 分解"로 저장된 경우 자동 복구
-  if (/^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(String(original.word || ""))) {
-    const repairedText = `${original.reading} ${original.meaning}`;
-    const separated = repairedText
-      .split(/\s+(?:-|–|—|\||\/|·|・)\s+/)
+  const numericWordOnly = /^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(
+    String(original.word || "")
+  );
+
+  // 예전 일괄입력 오류 예:
+  // word="39.", reading="분해", meaning="- ぶんかい - 分解"
+  if (numericWordOnly) {
+    const combined = `${original.reading || ""} ${original.meaning || ""}`
+      .normalize("NFKC")
+      .trim();
+
+    // 하이픈 앞뒤에 공백이 있든 없든 모두 분리합니다.
+    const separated = combined
+      .split(/\s*(?:-|–|—|\||\/|·|・)\s*/)
       .map(stripOuterSeparators)
       .filter(Boolean);
 
     if (separated.length >= 3) {
-      return { ...original, ...mapThreeParts(separated.slice(0, 3)) };
+      const mapped = mapThreeParts(separated);
+
+      if (mapped.word && mapped.reading && mapped.meaning) {
+        return { ...original, ...mapped };
+      }
     }
+
+    // 구분자가 비정상이어도 문자 종류를 이용해 마지막으로 복구 시도합니다.
+    const tokens = combined
+      .replace(/(?:-|–|—|\||\/|·|・)/g, " ")
+      .split(/\s+/)
+      .map(stripOuterSeparators)
+      .filter(Boolean);
+
+    if (tokens.length >= 3) {
+      const mapped = mapThreeParts(tokens);
+
+      if (mapped.word && mapped.reading && mapped.meaning) {
+        return { ...original, ...mapped };
+      }
+    }
+
+    // 확실히 복구하지 못한 항목은 빈 한자로 바꾸지 않고 원본을 유지합니다.
+    return original;
   }
 
   return {
@@ -1263,41 +1293,70 @@ async function migrateLocalItemsToCloud() {
 }
 
 
+function getMalformedItemRepairReport(items = sharedItems) {
+  const repairs = [];
+  const unresolved = [];
+
+  items.forEach(item => {
+    const normalized = normalizeImportedItem(item);
+    const changed =
+      normalized.word !== item.word ||
+      normalized.reading !== item.reading ||
+      normalized.meaning !== item.meaning;
+
+    if (!changed) {
+      const looksMalformed =
+        /^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(String(item.word || ""));
+
+      if (looksMalformed) unresolved.push(item);
+      return;
+    }
+
+    const valid =
+      String(normalized.word || "").trim() &&
+      String(normalized.reading || "").trim() &&
+      String(normalized.meaning || "").trim();
+
+    if (!valid) {
+      unresolved.push(item);
+      return;
+    }
+
+    repairs.push({
+      original: item,
+      normalized: {
+        ...item,
+        category: item.category || "word",
+        word: normalized.word,
+        reading: normalized.reading,
+        meaning: normalized.meaning,
+        example: item.example || "",
+        addedBy: item.addedBy || "도현"
+      }
+    });
+  });
+
+  return { repairs, unresolved };
+}
+
 function getMalformedItemRepairs(items = sharedItems) {
-  return items
-    .map(item => {
-      const normalized = normalizeImportedItem(item);
-      const changed =
-        normalized.word !== item.word ||
-        normalized.reading !== item.reading ||
-        normalized.meaning !== item.meaning;
-
-      if (!changed) return null;
-
-      return {
-        original: item,
-        normalized: {
-          ...item,
-          category: item.category || "word",
-          word: normalized.word,
-          reading: normalized.reading,
-          meaning: normalized.meaning,
-          example: item.example || "",
-          addedBy: item.addedBy || "도현"
-        }
-      };
-    })
-    .filter(Boolean);
+  return getMalformedItemRepairReport(items).repairs;
 }
 
 async function repairMalformedCloudItems(items = sharedItems, showResult = false) {
   if (cloudRepairInProgress) return 0;
 
-  const repairs = getMalformedItemRepairs(items);
+  const report = getMalformedItemRepairReport(items);
+  const repairs = report.repairs;
+  const unresolvedCount = report.unresolved.length;
+
   if (repairs.length === 0) {
     if (showResult) {
-      repairExistingItemsStatus.textContent = "고칠 항목이 없습니다. 모두 정상입니다.";
-      alert("고칠 항목이 없습니다. 모두 정상입니다.");
+      const message = unresolvedCount > 0
+        ? `자동 판별이 어려운 항목 ${unresolvedCount}개가 남아 있습니다.`
+        : "고칠 항목이 없습니다. 모두 정상입니다.";
+      repairExistingItemsStatus.textContent = message;
+      alert(message);
     }
     return 0;
   }
@@ -1316,9 +1375,15 @@ async function repairMalformedCloudItems(items = sharedItems, showResult = false
       repairExistingItemsButton.textContent = `복구 중 ${repairedCount} / ${repairs.length}`;
     }
 
-    repairExistingItemsStatus.textContent = `${repairedCount}개 복구 완료`;
+    const unresolvedText = unresolvedCount > 0
+      ? `
+자동 판별이 어려운 항목 ${unresolvedCount}개는 건드리지 않았습니다.`
+      : "";
+    repairExistingItemsStatus.textContent = unresolvedCount > 0
+      ? `${repairedCount}개 복구 완료 · 미확정 ${unresolvedCount}개`
+      : `${repairedCount}개 복구 완료`;
     if (showResult) {
-      alert(`${repairedCount}개 항목을 정상 형식으로 복구했습니다.`);
+      alert(`${repairedCount}개 항목을 정상 형식으로 복구했습니다.${unresolvedText}`);
     }
     return repairedCount;
   } catch (error) {
@@ -1341,7 +1406,9 @@ repairExistingItemsButton.addEventListener("click", async () => {
     return;
   }
 
-  const repairs = getMalformedItemRepairs();
+  const report = getMalformedItemRepairReport();
+  const repairs = report.repairs;
+  const unresolvedCount = report.unresolved.length;
 
   if (repairs.length === 0) {
     repairExistingItemsStatus.textContent = "고칠 항목이 없습니다. 모두 정상입니다.";
