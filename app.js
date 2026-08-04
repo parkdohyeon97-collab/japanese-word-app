@@ -1,4 +1,4 @@
-// v14.0: shared item lists separated by Dohyeon, Kana, and merged duplicates
+// v14.1: automatically repair swapped kanji and kana fields
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=140";
+} from "./firebase.js?v=141";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -346,9 +346,26 @@ function normalizeImportedItem(item) {
     return original;
   }
 
+  const cleanedWord = stripListNumber(original.word);
+  const cleanedReading = original.reading;
+
+  // 예전 데이터 중 한자와 읽는 법이 서로 뒤집혀 저장된 항목 자동 복구
+  // 예: word="かくす", reading="隠す" → word="隠す", reading="かくす"
+  const wordHasKana = containsKana(cleanedWord);
+  const wordHasKanji = /[\u3400-\u9fff々〆ヵヶ]/.test(cleanedWord);
+  const readingHasKanji = /[\u3400-\u9fff々〆ヵヶ]/.test(cleanedReading);
+
+  if (wordHasKana && !wordHasKanji && readingHasKanji) {
+    return {
+      ...original,
+      word: cleanedReading,
+      reading: cleanedWord
+    };
+  }
+
   return {
     ...original,
-    word: stripListNumber(original.word)
+    word: cleanedWord
   };
 }
 
