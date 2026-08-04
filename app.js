@@ -1,4 +1,4 @@
-// v11.5: unresolved-only review screen with direct Firebase editing
+// v11.5.1: fix startup crash caused by unresolved screen reference order
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=115";
+} from "./firebase.js?v=1151";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -91,7 +91,7 @@ const screens = {
   study: document.getElementById("studyScreen"),
   complete: document.getElementById("completeScreen"),
   annoying: document.getElementById("annoyingScreen"),
-  unresolved: unresolvedScreen,
+  unresolved: document.getElementById("unresolvedScreen"),
   search: document.getElementById("searchScreen"),
   random: document.getElementById("randomScreen")
 };
