@@ -1,4 +1,4 @@
-// v14.3: add edit pencil buttons to every shared-list item
+// v14.4: separate reading and meaning lines in recent list and add edit button
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=143";
+} from "./firebase.js?v=144";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -787,16 +787,29 @@ function renderRecentItems() {
 
   [...items].reverse().slice(0, 50).forEach(item => {
     const row = document.createElement("div");
-    row.className = "list-item";
+    row.className = "list-item recent-shared-item";
     row.innerHTML = `
-      <div>
+      <div class="recent-item-content">
         <strong>${escapeHtml(item.word)}</strong>
-        <span>${escapeHtml(item.reading)} · ${escapeHtml(item.meaning)}</span>
+        <span class="recent-item-reading">${escapeHtml(item.reading)}</span>
+        <span class="recent-item-meaning">${escapeHtml(item.meaning)}</span>
         <small class="added-by">추가: ${escapeHtml(item.addedBy || "이름 없음")}</small>
       </div>
-      <button type="button" data-id="${item.id}">삭제</button>
+
+      <div class="recent-item-actions">
+        <button class="recent-edit-button" type="button" aria-label="항목 수정" title="항목 수정">✏️</button>
+        <button class="recent-delete-button" type="button">삭제</button>
+      </div>
     `;
-    row.querySelector("button").addEventListener("click", () => deleteItem(item.id));
+
+    row.querySelector(".recent-edit-button").addEventListener("click", () => {
+      openItemEditor(item, "recentList");
+    });
+
+    row.querySelector(".recent-delete-button").addEventListener("click", () => {
+      deleteItem(item.id);
+    });
+
     recentWordList.appendChild(row);
   });
 }
@@ -1437,6 +1450,8 @@ editItemForm.addEventListener("submit", async event => {
 
     if (editSource === "sharedList") {
       renderSharedWordList();
+    } else if (editSource === "recentList") {
+      renderRecentItems();
     } else {
       showCurrentItem();
     }
