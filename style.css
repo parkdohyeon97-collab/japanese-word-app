@@ -704,3 +704,162 @@ pre {
     font-size: 10px;
   }
 }
+
+
+/* v10: 학습 중 현재 항목 수정 */
+.study-tool-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-current-button,
+.sound-button {
+  width: 50px;
+  height: 50px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+}
+
+.edit-current-button {
+  background: var(--panel-2);
+  color: white;
+  border: 1px solid var(--line);
+}
+
+.edit-current-button:active,
+.sound-button:active {
+  transform: scale(0.96);
+}
+
+body.dialog-open {
+  overflow: hidden;
+}
+
+.edit-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.edit-dialog-backdrop[hidden] {
+  display: none;
+}
+
+.edit-dialog {
+  width: min(100%, 520px);
+  max-height: 92vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+}
+
+.edit-dialog-header {
+  padding: 20px 20px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-dialog-header h2 {
+  margin: 0;
+  font-size: 23px;
+}
+
+.edit-dialog-header button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: white;
+  font-size: 29px;
+  line-height: 1;
+}
+
+.edit-dialog form {
+  padding: 8px 20px 22px;
+}
+
+.edit-dialog label {
+  display: block;
+  margin-top: 15px;
+  color: var(--sub);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.edit-dialog input {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  outline: none;
+  background: var(--panel-2);
+  color: white;
+  font-size: 18px;
+}
+
+.edit-dialog input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(101, 184, 198, 0.15);
+}
+
+.edit-item-owner {
+  margin: 16px 2px 0;
+  color: var(--teal);
+  font-size: 13px;
+}
+
+.edit-dialog-actions {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 10px;
+}
+
+.edit-dialog-actions button {
+  min-height: 54px;
+  border: 0;
+  border-radius: 16px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.edit-delete-button {
+  background: #3c2524;
+  color: #ffaaa2;
+}
+
+.edit-save-button {
+  background: var(--teal);
+  color: #071114;
+}
+
+.edit-dialog-actions button:disabled {
+  opacity: 0.55;
+}
+
+@media (max-width: 480px) {
+  .study-tool-buttons {
+    gap: 8px;
+  }
+
+  .edit-current-button,
+  .sound-button {
+    width: 48px;
+    height: 48px;
+  }
+}

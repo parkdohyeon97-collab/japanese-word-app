@@ -198,7 +198,10 @@
 
       <div class="study-meta">
         <span id="wrongCountBadge">공부하겠음 0회</span>
-        <button id="soundButton" class="sound-button" type="button">🔊</button>
+        <div class="study-tool-buttons">
+          <button id="editCurrentButton" class="edit-current-button" type="button" aria-label="현재 항목 수정" hidden>✏️</button>
+          <button id="soundButton" class="sound-button" type="button" aria-label="발음 듣기">🔊</button>
+        </div>
       </div>
 
       <section id="soundTouchArea" class="word-area">
@@ -238,6 +241,40 @@
     </section>
 
   </main>
+    <!-- 현재 학습 카드 수정 -->
+    <div id="editItemDialog" class="edit-dialog-backdrop" hidden>
+      <section class="edit-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle">
+        <header class="edit-dialog-header">
+          <h2 id="editDialogTitle">항목 수정</h2>
+          <button id="closeEditDialogButton" type="button" aria-label="수정창 닫기">×</button>
+        </header>
+
+        <form id="editItemForm">
+          <label>
+            한자·표현
+            <input id="editWordInput" type="text" required autocomplete="off">
+          </label>
+
+          <label>
+            히라가나
+            <input id="editReadingInput" type="text" required autocomplete="off">
+          </label>
+
+          <label>
+            한국어 뜻
+            <input id="editMeaningInput" type="text" required autocomplete="off">
+          </label>
+
+          <p id="editItemOwner" class="edit-item-owner"></p>
+
+          <div class="edit-dialog-actions">
+            <button id="deleteCurrentItemButton" class="edit-delete-button" type="button">삭제</button>
+            <button class="edit-save-button" type="submit">수정 저장</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

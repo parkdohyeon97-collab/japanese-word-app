@@ -161,6 +161,42 @@ export async function addSharedItems(items) {
   }
 }
 
+
+export async function updateSharedItem(itemId, item) {
+  if (!currentUser) await waitForFirebaseReady();
+  if (!itemId) throw new Error("수정할 항목의 ID가 없습니다.");
+
+  const category = item.category || "word";
+  const word = String(item.word || "").trim();
+
+  if (!word) throw new Error("한자나 표현을 입력해 주세요.");
+
+  const newItemId = makeDocumentId(category, word);
+  const oldReference = doc(db, "sharedItems", itemId);
+  const newReference = doc(db, "sharedItems", newItemId);
+  const batch = writeBatch(db);
+
+  batch.set(newReference, {
+    category,
+    word,
+    reading: String(item.reading || "").trim(),
+    meaning: String(item.meaning || "").trim(),
+    example: String(item.example || "").trim(),
+    addedBy: String(item.addedBy || "도현").trim(),
+    createdByUid: String(item.createdByUid || currentUser.uid),
+    createdAt: item.createdAt || serverTimestamp(),
+    updatedByUid: currentUser.uid,
+    updatedAt: serverTimestamp()
+  });
+
+  if (newItemId !== itemId) {
+    batch.delete(oldReference);
+  }
+
+  await batch.commit();
+  return newItemId;
+}
+
 export async function removeSharedItem(itemId) {
   if (!currentUser) await waitForFirebaseReady();
   if (!itemId) throw new Error("삭제할 항목의 ID가 없습니다.");

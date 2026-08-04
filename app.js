@@ -3,6 +3,7 @@ import {
   listenToSharedItems,
   addSharedItem,
   addSharedItems,
+  updateSharedItem,
   removeSharedItem
 } from "./firebase.js";
 
@@ -137,6 +138,15 @@ const meaningElement = document.getElementById("meaning");
 const wrongCountBadge = document.getElementById("wrongCountBadge");
 const soundTouchArea = document.getElementById("soundTouchArea");
 const soundButton = document.getElementById("soundButton");
+const editCurrentButton = document.getElementById("editCurrentButton");
+const editItemDialog = document.getElementById("editItemDialog");
+const closeEditDialogButton = document.getElementById("closeEditDialogButton");
+const editItemForm = document.getElementById("editItemForm");
+const editWordInput = document.getElementById("editWordInput");
+const editReadingInput = document.getElementById("editReadingInput");
+const editMeaningInput = document.getElementById("editMeaningInput");
+const editItemOwner = document.getElementById("editItemOwner");
+const deleteCurrentItemButton = document.getElementById("deleteCurrentItemButton");
 const meaningButton = document.getElementById("meaningButton");
 const studyAgainButton = document.getElementById("studyAgainButton");
 const knowButton = document.getElementById("knowButton");
@@ -623,6 +633,7 @@ function showCurrentItem() {
   wordElement.textContent = item.word;
   readingElement.textContent = item.reading;
   meaningElement.textContent = item.meaning;
+  editCurrentButton.hidden = !item.shared;
 
   answerElement.hidden = true;
   meaningButton.textContent = "뜻 보기";
@@ -676,6 +687,145 @@ meaningButton.addEventListener("click", () => {
   const hidden = answerElement.hidden;
   answerElement.hidden = !hidden;
   meaningButton.textContent = hidden ? "뜻 숨기기" : "뜻 보기";
+});
+
+
+function openCurrentItemEditor() {
+  const item = getCurrentItem();
+
+  if (!item || !item.shared) {
+    alert("직접 추가한 항목만 수정할 수 있습니다.");
+    return;
+  }
+
+  editWordInput.value = item.word || "";
+  editReadingInput.value = item.reading || "";
+  editMeaningInput.value = item.meaning || "";
+  editItemOwner.textContent = `추가한 사람: ${item.addedBy || "이름 없음"}`;
+  editItemDialog.hidden = false;
+  document.body.classList.add("dialog-open");
+
+  setTimeout(() => editWordInput.focus(), 50);
+}
+
+function closeCurrentItemEditor() {
+  editItemDialog.hidden = true;
+  document.body.classList.remove("dialog-open");
+}
+
+editCurrentButton.addEventListener("click", openCurrentItemEditor);
+closeEditDialogButton.addEventListener("click", closeCurrentItemEditor);
+
+editItemDialog.addEventListener("click", event => {
+  if (event.target === editItemDialog) closeCurrentItemEditor();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !editItemDialog.hidden) {
+    closeCurrentItemEditor();
+  }
+});
+
+editItemForm.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const item = getCurrentItem();
+  if (!item || !item.shared) return;
+
+  const word = editWordInput.value.trim();
+  const reading = editReadingInput.value.trim();
+  const meaning = editMeaningInput.value.trim();
+
+  if (!word || !reading || !meaning) {
+    alert("한자·히라가나·뜻을 모두 입력해 주세요.");
+    return;
+  }
+
+  const duplicate = sharedItems.find(candidate =>
+    candidate.id !== item.id
+    && (candidate.category || "word") === (item.category || currentCategory)
+    && normalizeDuplicateText(candidate.word) === normalizeDuplicateText(word)
+  );
+
+  if (duplicate) {
+    alert("같은 카테고리에 이미 등록된 항목입니다.");
+    return;
+  }
+
+  const saveButton = editItemForm.querySelector(".edit-save-button");
+  saveButton.disabled = true;
+  saveButton.textContent = "저장 중…";
+
+  try {
+    const newId = await updateSharedItem(item.id, {
+      ...item,
+      word,
+      reading,
+      meaning,
+      category: item.category || currentCategory
+    });
+
+    const updatedItem = {
+      ...item,
+      id: newId,
+      word,
+      reading,
+      meaning
+    };
+
+    currentItems[currentIndex] = updatedItem;
+    nextRoundItems = nextRoundItems.map(roundItem =>
+      roundItem.id === item.id ? updatedItem : roundItem
+    );
+
+    closeCurrentItemEditor();
+    showCurrentItem();
+  } catch (error) {
+    console.error(error);
+    alert("수정하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = "수정 저장";
+  }
+});
+
+deleteCurrentItemButton.addEventListener("click", async () => {
+  const item = getCurrentItem();
+  if (!item || !item.shared) return;
+
+  if (!confirm(`"${item.word}" 항목을 공유 단어장에서 삭제할까요?`)) return;
+
+  deleteCurrentItemButton.disabled = true;
+  deleteCurrentItemButton.textContent = "삭제 중…";
+
+  try {
+    await removeSharedItem(item.id);
+
+    const counts = getWrongCounts();
+    delete counts[item.id];
+    saveWrongCounts(counts);
+
+    currentItems.splice(currentIndex, 1);
+    nextRoundItems = nextRoundItems.filter(roundItem => roundItem.id !== item.id);
+
+    closeCurrentItemEditor();
+
+    if (currentIndex >= currentItems.length) {
+      currentIndex = Math.max(0, currentItems.length - 1);
+    }
+
+    if (currentItems.length === 0) {
+      finishStudy();
+    } else {
+      showCurrentItem();
+    }
+  } catch (error) {
+    console.error(error);
+    alert("삭제하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  } finally {
+    deleteCurrentItemButton.disabled = false;
+    deleteCurrentItemButton.textContent = "삭제";
+  }
 });
 
 function playSound() {
