@@ -863,3 +863,34 @@ body.dialog-open {
     height: 48px;
   }
 }
+
+
+.repair-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.repair-panel strong {
+  font-size: 18px;
+}
+
+.secondary-button {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid var(--teal);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--teal);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+}
+
+.repair-status {
+  min-height: 20px;
+  margin: 0;
+}

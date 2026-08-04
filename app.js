@@ -1,4 +1,4 @@
-// v11.2: automatic import cleanup plus one-time repair of already saved Firebase items
+// v11.3: explicit Firebase migration button for repairing previously malformed bulk imports
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -134,6 +134,8 @@ const saveBulkButton = document.getElementById("saveBulkButton");
 const recentWordList = document.getElementById("recentWordList");
 const addedBySelect = document.getElementById("addedBySelect");
 const cloudStatus = document.getElementById("cloudStatus");
+const repairExistingItemsButton = document.getElementById("repairExistingItemsButton");
+const repairExistingItemsStatus = document.getElementById("repairExistingItemsStatus");
 
 const studyTitle = document.getElementById("studyTitle");
 const currentNumber = document.getElementById("currentNumber");
@@ -1261,10 +1263,8 @@ async function migrateLocalItemsToCloud() {
 }
 
 
-async function repairMalformedCloudItems(items) {
-  if (cloudRepairInProgress) return;
-
-  const repairs = items
+function getMalformedItemRepairs(items = sharedItems) {
+  return items
     .map(item => {
       const normalized = normalizeImportedItem(item);
       const changed =
@@ -1272,37 +1272,98 @@ async function repairMalformedCloudItems(items) {
         normalized.reading !== item.reading ||
         normalized.meaning !== item.meaning;
 
-      return changed
-        ? {
-            id: item.id,
-            word: normalized.word,
-            reading: normalized.reading,
-            meaning: normalized.meaning
-          }
-        : null;
+      if (!changed) return null;
+
+      return {
+        original: item,
+        normalized: {
+          ...item,
+          category: item.category || "word",
+          word: normalized.word,
+          reading: normalized.reading,
+          meaning: normalized.meaning,
+          example: item.example || "",
+          addedBy: item.addedBy || "도현"
+        }
+      };
     })
     .filter(Boolean);
+}
 
-  if (repairs.length === 0) return;
+async function repairMalformedCloudItems(items = sharedItems, showResult = false) {
+  if (cloudRepairInProgress) return 0;
+
+  const repairs = getMalformedItemRepairs(items);
+  if (repairs.length === 0) {
+    if (showResult) {
+      repairExistingItemsStatus.textContent = "고칠 항목이 없습니다. 모두 정상입니다.";
+      alert("고칠 항목이 없습니다. 모두 정상입니다.");
+    }
+    return 0;
+  }
 
   cloudRepairInProgress = true;
+  repairExistingItemsButton.disabled = true;
+  repairExistingItemsButton.textContent = `복구 중 0 / ${repairs.length}`;
+  repairExistingItemsStatus.textContent = `${repairs.length}개 항목을 복구하고 있습니다. 앱을 닫지 마세요.`;
+
+  let repairedCount = 0;
 
   try {
     for (const repair of repairs) {
-      await updateSharedItem(repair.id, {
-        word: repair.word,
-        reading: repair.reading,
-        meaning: repair.meaning
-      });
+      await updateSharedItem(repair.original.id, repair.normalized);
+      repairedCount += 1;
+      repairExistingItemsButton.textContent = `복구 중 ${repairedCount} / ${repairs.length}`;
     }
 
-    console.log(`잘못 저장된 공유 항목 ${repairs.length}개를 자동 수정했습니다.`);
+    repairExistingItemsStatus.textContent = `${repairedCount}개 복구 완료`;
+    if (showResult) {
+      alert(`${repairedCount}개 항목을 정상 형식으로 복구했습니다.`);
+    }
+    return repairedCount;
   } catch (error) {
     console.error("공유 항목 자동 수정 실패:", error);
+    repairExistingItemsStatus.textContent = `${repairedCount}개까지 복구 후 오류가 발생했습니다. 다시 누르면 이어서 처리됩니다.`;
+    if (showResult) {
+      alert(`${repairedCount}개까지 복구했습니다.\n인터넷 연결을 확인한 뒤 버튼을 다시 눌러 주세요.`);
+    }
+    return repairedCount;
   } finally {
     cloudRepairInProgress = false;
+    repairExistingItemsButton.disabled = false;
+    repairExistingItemsButton.textContent = "기존 단어 검사·복구";
   }
 }
+
+repairExistingItemsButton.addEventListener("click", async () => {
+  if (!cloudConnected) {
+    alert("공유 연결이 끝난 뒤 다시 눌러 주세요.");
+    return;
+  }
+
+  const repairs = getMalformedItemRepairs();
+
+  if (repairs.length === 0) {
+    repairExistingItemsStatus.textContent = "고칠 항목이 없습니다. 모두 정상입니다.";
+    alert("고칠 항목이 없습니다. 모두 정상입니다.");
+    return;
+  }
+
+  const preview = repairs
+    .slice(0, 5)
+    .map(({ original, normalized }) =>
+      `${original.word} / ${original.reading} / ${original.meaning}\n→ ${normalized.word} / ${normalized.reading} / ${normalized.meaning}`
+    )
+    .join("\n\n");
+
+  const extra = repairs.length > 5 ? `\n\n외 ${repairs.length - 5}개` : "";
+
+  if (!confirm(
+    `잘못 저장된 항목 ${repairs.length}개를 찾았습니다.\n\n${preview}${extra}\n\n전부 자동으로 복구할까요?`
+  )) return;
+
+  await repairMalformedCloudItems(sharedItems, true);
+});
 
 async function startCloudSync() {
   setCloudStatus("로그인 중…", "loading");
@@ -1317,8 +1378,10 @@ async function startCloudSync() {
         cloudConnected = true;
         setCloudStatus("공유 연결됨", "connected");
 
-        // 예전에 번호와 하이픈이 섞인 채 저장된 항목도 Firebase에서 자동 수정합니다.
-        repairMalformedCloudItems(items);
+        const repairCount = getMalformedItemRepairs(items).length;
+        repairExistingItemsStatus.textContent = repairCount > 0
+          ? `복구가 필요한 기존 항목 ${repairCount}개가 있습니다.`
+          : "기존 저장 항목이 정상입니다.";
 
         renderHome();
 

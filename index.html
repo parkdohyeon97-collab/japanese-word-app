@@ -116,7 +116,7 @@
       <header class="page-header wide-header">
         <button id="closeChapterButton" class="back-button" type="button">←</button>
         <div>
-          <p class="eyebrow">50개씩 추가 · 최대 200개 누적</p>
+          <p class="eyebrow">신규 2장 학습 후 앞의 두 장 합쳐 복습</p>
           <h2 id="categoryTitle">단어</h2>
         </div>
         <button id="openAddButton" class="circle-button small-circle" type="button">＋</button>
@@ -159,6 +159,15 @@
         <p class="help">여기서 고른 이름이 공유 단어장에 함께 표시됩니다.</p>
       </section>
 
+      <section class="panel repair-panel">
+        <div>
+          <strong>기존 단어 자동복구</strong>
+          <p class="help">번호·하이픈 때문에 잘못 저장된 기존 항목을 한 번에 바로잡습니다.</p>
+        </div>
+        <button id="repairExistingItemsButton" class="secondary-button" type="button">기존 단어 검사·복구</button>
+        <p id="repairExistingItemsStatus" class="help repair-status"></p>
+      </section>
+
       <div class="tabs">
         <button id="singleTabButton" class="tab active" type="button">1개 추가</button>
         <button id="bulkTabButton" class="tab" type="button">여러 개 추가</button>
@@ -191,7 +200,7 @@
         <button id="exitStudyButton" type="button">☰</button>
         <div>
           <strong id="studyTitle">단어 제 1장 1회독</strong>
-          <span><span id="currentNumber">1</span> / <span id="totalNumber">50</span></span>
+          <span><span id="currentNumber">1</span> / <span id="totalNumber">100</span></span>
         </div>
         <button id="closeStudyButton" type="button">×</button>
       </header>
