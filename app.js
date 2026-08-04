@@ -1,4 +1,4 @@
-// v14.4: separate reading and meaning lines in recent list and add edit button
+// v14.5: one-click automatic repair plus forced clean list refresh
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=144";
+} from "./firebase.js?v=145";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2201,8 +2201,15 @@ async function repairMalformedCloudItems(items = sharedItems, showResult = false
       ? `${repairedCount}개 복구 완료 · 미확정 ${unresolvedCount}개`
       : `${repairedCount}개 복구 완료`;
     updateUnresolvedButton();
+    renderRecentItems();
+
+    if (!screens.sharedList.hidden) {
+      updateSharedOwnerCounts();
+      if (!sharedWordListArea.hidden) renderSharedWordList();
+    }
+
     if (showResult) {
-      alert(`${repairedCount}개 항목을 정상 형식으로 복구했습니다.${unresolvedText}`);
+      alert(`${repairedCount}개 항목을 자동 복구했습니다.${unresolvedText}\n읽는 법과 뜻 표시도 새 형식으로 갱신했습니다.`);
     }
     return repairedCount;
   } catch (error) {
@@ -2230,8 +2237,22 @@ repairExistingItemsButton.addEventListener("click", async () => {
   const unresolvedCount = report.unresolved.length;
 
   if (repairs.length === 0) {
-    repairExistingItemsStatus.textContent = "고칠 항목이 없습니다. 모두 정상입니다.";
-    alert("고칠 항목이 없습니다. 모두 정상입니다.");
+    repairExistingItemsStatus.textContent = unresolvedCount > 0
+      ? `자동 판별이 어려운 항목 ${unresolvedCount}개가 남아 있습니다.`
+      : "데이터 정리 완료 · 목록 표시도 새 형식으로 갱신했습니다.";
+
+    renderRecentItems();
+
+    if (!screens.sharedList.hidden) {
+      updateSharedOwnerCounts();
+      if (!sharedWordListArea.hidden) renderSharedWordList();
+    }
+
+    alert(
+      unresolvedCount > 0
+        ? `자동 판별이 어려운 항목 ${unresolvedCount}개가 남아 있습니다. 미확정 항목에서 확인해 주세요.`
+        : "자동 정리가 끝났습니다. 읽는 법과 뜻 사이의 ·, - 표시는 이제 나오지 않습니다."
+    );
     return;
   }
 
