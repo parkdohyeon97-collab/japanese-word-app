@@ -1056,3 +1056,156 @@ body.dialog-open {
     grid-template-columns: 1fr;
   }
 }
+
+
+.shared-list-home-card {
+  margin-top: 12px;
+}
+
+.shared-list-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.shared-owner-cards {
+  display: grid;
+  gap: 14px;
+}
+
+.shared-owner-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  color: inherit;
+  text-align: left;
+}
+
+.shared-owner-card > span {
+  font-size: 26px;
+}
+
+.shared-owner-card strong {
+  font-size: 17px;
+}
+
+.shared-owner-card small {
+  color: var(--teal);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.shared-owner-all {
+  border-color: rgba(75, 210, 191, 0.42);
+}
+
+.shared-word-list-area {
+  display: grid;
+  gap: 16px;
+}
+
+.shared-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.shared-list-toolbar strong {
+  font-size: 18px;
+}
+
+.compact-button {
+  width: auto;
+  min-height: 42px;
+  padding: 9px 13px;
+  margin: 0;
+}
+
+.shared-list-search {
+  margin: 0;
+}
+
+.shared-word-list {
+  display: grid;
+  gap: 13px;
+}
+
+.shared-word-card {
+  display: grid;
+  gap: 13px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+
+.shared-word-main {
+  display: grid;
+  gap: 5px;
+}
+
+.shared-word-main > strong {
+  font-size: 23px;
+  line-height: 1.25;
+}
+
+.shared-word-main > span {
+  color: var(--teal);
+  font-size: 16px;
+}
+
+.shared-item-meaning {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.shared-meaning-variants {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.shared-meaning-variants span {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.shared-word-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.shared-word-meta > span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shared-word-meta .shared-overlap-badge {
+  background: rgba(75, 210, 191, 0.12);
+  color: var(--teal);
+}
+
+@media (min-width: 720px) {
+  .shared-owner-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .shared-owner-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+}

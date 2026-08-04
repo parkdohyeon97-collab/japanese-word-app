@@ -1,4 +1,4 @@
-// v13.0: ElevenLabs TTS with device-only key storage, voice picker, cache and browser fallback
+// v14.0: shared item lists separated by Dohyeon, Kana, and merged duplicates
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=130";
+} from "./firebase.js?v=140";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -93,7 +93,8 @@ const screens = {
   annoying: document.getElementById("annoyingScreen"),
   unresolved: document.getElementById("unresolvedScreen"),
   search: document.getElementById("searchScreen"),
-  random: document.getElementById("randomScreen")
+  random: document.getElementById("randomScreen"),
+  sharedList: document.getElementById("sharedListScreen")
 };
 
 const categoryTitle = document.getElementById("categoryTitle");
@@ -118,6 +119,19 @@ const randomReviewCount = document.getElementById("randomReviewCount");
 const randomCountPanel = document.getElementById("randomCountPanel");
 const randomSelectedTitle = document.getElementById("randomSelectedTitle");
 const randomCountHelp = document.getElementById("randomCountHelp");
+const openSharedListButton = document.getElementById("openSharedListButton");
+const closeSharedListButton = document.getElementById("closeSharedListButton");
+const sharedOwnerCards = document.getElementById("sharedOwnerCards");
+const sharedWordListArea = document.getElementById("sharedWordListArea");
+const backToSharedOwnersButton = document.getElementById("backToSharedOwnersButton");
+const dohyeonSharedCount = document.getElementById("dohyeonSharedCount");
+const kanaSharedCount = document.getElementById("kanaSharedCount");
+const allSharedCount = document.getElementById("allSharedCount");
+const sharedListTitle = document.getElementById("sharedListTitle");
+const sharedListSearchInput = document.getElementById("sharedListSearchInput");
+const clearSharedListSearchButton = document.getElementById("clearSharedListSearchButton");
+const sharedListSummary = document.getElementById("sharedListSummary");
+const sharedWordList = document.getElementById("sharedWordList");
 
 const closeChapterButton = document.getElementById("closeChapterButton");
 const openAddButton = document.getElementById("openAddButton");
@@ -351,6 +365,180 @@ function getCategoryItems(category) {
   return getAllItems().filter(item => item.category === category);
 }
 
+
+let currentSharedOwner = "all";
+
+function normalizeOwnerName(value) {
+  const name = String(value || "").trim();
+  if (name === "카나" || name.includes("카나")) return "카나";
+  return "도현";
+}
+
+function getSharedCloudItems() {
+  return sharedItems
+    .map(item => normalizeImportedItem({
+      ...item,
+      category: item.category || "word",
+      addedBy: normalizeOwnerName(item.addedBy)
+    }))
+    .filter(item => item.word && item.reading && item.meaning);
+}
+
+function getSharedItemKey(item) {
+  return [
+    normalizeDuplicateText(item.word),
+    normalizeDuplicateText(item.reading)
+  ].join("::");
+}
+
+function getGroupedSharedItems(owner = "all") {
+  const groups = new Map();
+
+  getSharedCloudItems().forEach(item => {
+    const itemOwner = normalizeOwnerName(item.addedBy);
+
+    if (owner !== "all" && itemOwner !== owner) return;
+
+    const key = getSharedItemKey(item);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        word: item.word,
+        reading: item.reading,
+        meanings: [],
+        owners: new Set(),
+        categories: new Set(),
+        sourceItems: []
+      });
+    }
+
+    const group = groups.get(key);
+    const meaning = String(item.meaning || "").trim();
+
+    if (meaning && !group.meanings.includes(meaning)) {
+      group.meanings.push(meaning);
+    }
+
+    group.owners.add(itemOwner);
+    group.categories.add(item.category || "word");
+    group.sourceItems.push(item);
+  });
+
+  // 선택한 사람 목록에서도 상대방이 같은 단어를 넣었는지 표시하기 위해 전체 자료를 다시 확인
+  if (owner !== "all") {
+    const allItems = getSharedCloudItems();
+
+    groups.forEach((group, key) => {
+      allItems.forEach(item => {
+        if (getSharedItemKey(item) !== key) return;
+
+        const itemOwner = normalizeOwnerName(item.addedBy);
+        group.owners.add(itemOwner);
+
+        const meaning = String(item.meaning || "").trim();
+        if (meaning && !group.meanings.includes(meaning)) {
+          group.meanings.push(meaning);
+        }
+      });
+    });
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    String(a.word).localeCompare(String(b.word), "ja")
+  );
+}
+
+function updateSharedOwnerCounts() {
+  const dohyeonCount = getGroupedSharedItems("도현").length;
+  const kanaCount = getGroupedSharedItems("카나").length;
+  const allCount = getGroupedSharedItems("all").length;
+
+  dohyeonSharedCount.textContent = `${dohyeonCount}개`;
+  kanaSharedCount.textContent = `${kanaCount}개`;
+  allSharedCount.textContent = `${allCount}개`;
+}
+
+function getSharedCategoryLabel(categories) {
+  return [...categories]
+    .map(category => CATEGORY_NAMES[category] || category)
+    .join(" · ");
+}
+
+function renderSharedWordList() {
+  const query = normalizeDuplicateText(sharedListSearchInput.value);
+  const ownerLabel = currentSharedOwner === "all"
+    ? "도현 · 카나 전체 항목"
+    : `${currentSharedOwner}이 추가한 항목`;
+
+  sharedListTitle.textContent = ownerLabel;
+
+  const groupedItems = getGroupedSharedItems(currentSharedOwner);
+  const filteredItems = groupedItems.filter(item => {
+    if (!query) return true;
+
+    return [
+      item.word,
+      item.reading,
+      ...item.meanings
+    ].some(value => normalizeDuplicateText(value).includes(query));
+  });
+
+  sharedListSummary.textContent = query
+    ? `${filteredItems.length}개 검색됨 · 전체 ${groupedItems.length}개`
+    : `${groupedItems.length}개`;
+
+  sharedWordList.innerHTML = "";
+
+  if (filteredItems.length === 0) {
+    sharedWordList.innerHTML = `
+      <div class="empty-box">
+        ${query ? "검색 결과가 없습니다." : "아직 추가한 항목이 없습니다."}
+      </div>
+    `;
+    return;
+  }
+
+  filteredItems.forEach(item => {
+    const owners = [...item.owners];
+    const ownerText = owners.length > 1 ? "도현 · 카나" : owners[0];
+    const overlapText = currentSharedOwner !== "all" && owners.length > 1
+      ? `<span class="shared-overlap-badge">👥 ${currentSharedOwner === "도현" ? "카나도 추가함" : "도현도 추가함"}</span>`
+      : "";
+
+    const meaningHtml = item.meanings.length === 1
+      ? `<p class="shared-item-meaning">${escapeHtml(item.meanings[0])}</p>`
+      : `
+        <div class="shared-meaning-variants">
+          ${item.meanings.map(meaning => `<span>${escapeHtml(meaning)}</span>`).join("")}
+        </div>
+      `;
+
+    const card = document.createElement("article");
+    card.className = "shared-word-card";
+    card.innerHTML = `
+      <div class="shared-word-main">
+        <strong>${escapeHtml(item.word)}</strong>
+        <span>${escapeHtml(item.reading)}</span>
+        ${meaningHtml}
+      </div>
+
+      <div class="shared-word-meta">
+        <span>${escapeHtml(getSharedCategoryLabel(item.categories))}</span>
+        <span>추가: ${escapeHtml(ownerText)}</span>
+        ${overlapText}
+      </div>
+    `;
+
+    sharedWordList.appendChild(card);
+  });
+}
+
+function showSharedOwnerSelection() {
+  sharedOwnerCards.hidden = false;
+  sharedWordListArea.hidden = true;
+  sharedListSearchInput.value = "";
+  updateSharedOwnerCounts();
+}
+
 function getWrongCount(id) {
   return Number(getWrongCounts()[id] || 0);
 }
@@ -380,6 +568,7 @@ function renderHome() {
   reviewCategoryCount.textContent = `${getCategoryItems("review").length}개`;
   randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
   randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
+  updateSharedOwnerCounts();
 }
 
 
@@ -1557,6 +1746,37 @@ function renderSearchResults() {
   });
 }
 
+openSharedListButton.addEventListener("click", () => {
+  showSharedOwnerSelection();
+  showScreen("sharedList");
+});
+
+closeSharedListButton.addEventListener("click", () => {
+  showScreen("home");
+});
+
+document.querySelectorAll("[data-shared-owner]").forEach(button => {
+  button.addEventListener("click", () => {
+    currentSharedOwner = button.dataset.sharedOwner;
+    sharedOwnerCards.hidden = true;
+    sharedWordListArea.hidden = false;
+    sharedListSearchInput.value = "";
+    renderSharedWordList();
+  });
+});
+
+backToSharedOwnersButton.addEventListener("click", () => {
+  showSharedOwnerSelection();
+});
+
+sharedListSearchInput.addEventListener("input", renderSharedWordList);
+
+clearSharedListSearchButton.addEventListener("click", () => {
+  sharedListSearchInput.value = "";
+  renderSharedWordList();
+  sharedListSearchInput.focus();
+});
+
 openSearchButton.addEventListener("click", () => {
   searchInput.value = "";
   searchResultList.innerHTML = "";
@@ -1972,6 +2192,10 @@ async function startCloudSync() {
         if (!screens.chapter.hidden) renderChapterScreen();
         if (!screens.add.hidden) renderRecentItems();
         if (!screens.search.hidden) renderSearchResults();
+        if (!screens.sharedList.hidden) {
+          updateSharedOwnerCounts();
+          if (!sharedWordListArea.hidden) renderSharedWordList();
+        }
 
         if (firstConnection) {
           try {

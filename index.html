@@ -57,6 +57,65 @@
         </span>
         <b>›</b>
       </button>
+
+      <button id="openSharedListButton" class="random-home-card shared-list-home-card" type="button">
+        <span class="random-icon">👥</span>
+        <span>
+          <strong>전체 단어목록</strong>
+          <small>도현 · 카나가 추가한 항목 보기</small>
+        </span>
+        <b>›</b>
+      </button>
+    </section>
+
+    <!-- 도현·카나 전체 단어목록 -->
+    <section id="sharedListScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeSharedListButton" class="back-button" type="button">←</button>
+        <div>
+          <p class="eyebrow">공유 단어장</p>
+          <h2>전체 단어목록</h2>
+        </div>
+        <div></div>
+      </header>
+
+      <section class="shared-list-panel">
+        <div id="sharedOwnerCards" class="shared-owner-cards">
+          <button class="shared-owner-card" data-shared-owner="도현" type="button">
+            <span>👤</span>
+            <strong>도현이 추가한 항목</strong>
+            <small id="dohyeonSharedCount">0개</small>
+          </button>
+
+          <button class="shared-owner-card" data-shared-owner="카나" type="button">
+            <span>👤</span>
+            <strong>카나가 추가한 항목</strong>
+            <small id="kanaSharedCount">0개</small>
+          </button>
+
+          <button class="shared-owner-card shared-owner-all" data-shared-owner="all" type="button">
+            <span>👥</span>
+            <strong>둘이 추가한 전체 항목</strong>
+            <small id="allSharedCount">0개</small>
+          </button>
+        </div>
+
+        <section id="sharedWordListArea" class="shared-word-list-area" hidden>
+          <div class="shared-list-toolbar">
+            <button id="backToSharedOwnersButton" class="secondary-button compact-button" type="button">← 사람 선택</button>
+            <strong id="sharedListTitle">전체 항목</strong>
+          </div>
+
+          <label class="search-box shared-list-search">
+            <span>⌕</span>
+            <input id="sharedListSearchInput" type="search" autocomplete="off" placeholder="한자·히라가나·한글 뜻 검색">
+            <button id="clearSharedListSearchButton" type="button" aria-label="검색어 지우기">×</button>
+          </label>
+
+          <p id="sharedListSummary" class="search-summary"></p>
+          <div id="sharedWordList" class="shared-word-list"></div>
+        </section>
+      </section>
     </section>
 
     <!-- 랜덤복습 -->
@@ -354,6 +413,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=130"></script>
+  <script type="module" src="app.js?v=140"></script>
 </body>
 </html>
