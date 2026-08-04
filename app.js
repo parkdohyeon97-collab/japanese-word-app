@@ -1,3 +1,4 @@
+// v11: category chapter sizes, two-new-plus-review pattern, randomized study order, Otoya-first TTS
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -7,7 +8,12 @@ import {
   removeSharedItem
 } from "./firebase.js";
 
-const CHAPTER_SIZE = 50;
+const CATEGORY_CHAPTER_SIZES = {
+  word: 100,
+  grammar: 20,
+  conversation: 100,
+  review: 100
+};
 const ANNOYING_LIMIT = 8;
 const USER_ITEMS_KEY = "jpAppItemsV5";
 const WRONG_COUNTS_KEY = "jpAppWrongCountsV5";
@@ -245,9 +251,63 @@ function renderHome() {
   randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
 }
 
+
+function getChapterSize(category = currentCategory) {
+  return CATEGORY_CHAPTER_SIZES[category] || 100;
+}
+
+function getChapterPlans(category, itemCount) {
+  const size = getChapterSize(category);
+  const newChunkCount = Math.ceil(itemCount / size);
+  const plans = [];
+  let displayChapter = 1;
+
+  for (let chunkIndex = 0; chunkIndex < newChunkCount; chunkIndex += 2) {
+    const firstStart = chunkIndex * size;
+    const firstEnd = Math.min(firstStart + size, itemCount);
+
+    plans.push({
+      chapter: displayChapter,
+      type: "new",
+      start: firstStart,
+      end: firstEnd,
+      rangeStart: firstStart + 1,
+      rangeEnd: firstEnd
+    });
+    displayChapter += 1;
+
+    const secondStart = (chunkIndex + 1) * size;
+    if (secondStart >= itemCount) break;
+
+    const secondEnd = Math.min(secondStart + size, itemCount);
+    plans.push({
+      chapter: displayChapter,
+      type: "new",
+      start: secondStart,
+      end: secondEnd,
+      rangeStart: secondStart + 1,
+      rangeEnd: secondEnd
+    });
+    displayChapter += 1;
+
+    plans.push({
+      chapter: displayChapter,
+      type: "review",
+      start: firstStart,
+      end: secondEnd,
+      rangeStart: firstStart + 1,
+      rangeEnd: secondEnd
+    });
+    displayChapter += 1;
+  }
+
+  return plans;
+}
+
 function renderChapterScreen() {
   const items = getCategoryItems(currentCategory);
   const categoryName = CATEGORY_NAMES[currentCategory];
+  const chapterSize = getChapterSize(currentCategory);
 
   categoryTitle.textContent = categoryName;
   categoryTotalCount.textContent = items.length;
@@ -265,26 +325,30 @@ function renderChapterScreen() {
     return;
   }
 
-  const chapterCount = Math.ceil(items.length / CHAPTER_SIZE);
+  const plans = getChapterPlans(currentCategory, items.length);
 
-  for (let chapter = 1; chapter <= chapterCount; chapter += 1) {
-    const blockStart = Math.floor((chapter - 1) / 4) * 200;
-    const end = Math.min(chapter * CHAPTER_SIZE, items.length);
-    const newStart = (chapter - 1) * CHAPTER_SIZE + 1;
-    const studyStart = blockStart + 1;
-    const studyCount = end - blockStart;
-
+  plans.forEach(plan => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "chapter-card";
-    card.innerHTML = `
-      <span class="chapter-name">제 ${chapter}장</span>
-      <strong>${studyStart} ~ ${end}</strong>
-      <small>새 항목 ${newStart}~${end}<br>이번 묶음 ${studyCount}개 누적 학습</small>
-    `;
-    card.addEventListener("click", () => startChapter(chapter));
+
+    if (plan.type === "review") {
+      card.innerHTML = `
+        <span class="chapter-name">제 ${plan.chapter}장 · 복습</span>
+        <strong>${plan.rangeStart} ~ ${plan.rangeEnd}</strong>
+        <small>앞의 두 장 합쳐서 ${plan.end - plan.start}개 복습<br>시작할 때마다 순서가 랜덤으로 바뀝니다</small>
+      `;
+    } else {
+      card.innerHTML = `
+        <span class="chapter-name">제 ${plan.chapter}장</span>
+        <strong>${plan.rangeStart} ~ ${plan.rangeEnd}</strong>
+        <small>새 항목 ${plan.end - plan.start}개 학습<br>${categoryName} 기준 장당 최대 ${chapterSize}개</small>
+      `;
+    }
+
+    card.addEventListener("click", () => startChapter(plan.chapter));
     chapterList.appendChild(card);
-  }
+  });
 }
 
 function escapeHtml(value) {
@@ -575,12 +639,19 @@ function startRandomStudy(count) {
 
 function startChapter(chapter) {
   const items = getCategoryItems(currentCategory);
-  const blockStart = Math.floor((chapter - 1) / 4) * 200;
-  const end = Math.min(chapter * CHAPTER_SIZE, items.length);
+  const plan = getChapterPlans(currentCategory, items.length)
+    .find(candidate => candidate.chapter === chapter);
+
+  if (!plan) {
+    alert("이 장을 불러오지 못했습니다.");
+    return;
+  }
 
   studyMode = "chapter";
   selectedChapter = chapter;
-  startStudy(items.slice(blockStart, end));
+
+  // 같은 장을 다시 열어도 항상 새로운 순서로 시작합니다.
+  startStudy(shuffleItems(items.slice(plan.start, plan.end)));
 }
 
 function startAnnoyingStudy() {
@@ -625,7 +696,12 @@ function showCurrentItem() {
       ? `${categoryName} 검색 결과`
       : studyMode === "random"
         ? `${categoryName} 랜덤 ${randomRequestedCount}개`
-        : `${categoryName} 제 ${selectedChapter}장 ${roundNumber}회독`;
+        : (() => {
+          const plan = getChapterPlans(currentCategory, getCategoryItems(currentCategory).length)
+            .find(candidate => candidate.chapter === selectedChapter);
+          const reviewLabel = plan?.type === "review" ? " 복습" : "";
+          return `${categoryName} 제 ${selectedChapter}장${reviewLabel} ${roundNumber}회독`;
+        })();
 
   currentNumber.textContent = currentIndex + 1;
   totalNumber.textContent = currentItems.length;
@@ -658,7 +734,7 @@ function nextItem() {
     return;
   }
 
-  currentItems = [...nextRoundItems];
+  currentItems = shuffleItems(nextRoundItems);
   nextRoundItems = [];
   currentIndex = 0;
   roundNumber += 1;
@@ -828,6 +904,33 @@ deleteCurrentItemButton.addEventListener("click", async () => {
   }
 });
 
+function getPreferredJapaneseVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  const japaneseVoices = voices.filter(voice =>
+    String(voice.lang || "").toLowerCase().startsWith("ja")
+  );
+
+  const preferredNames = [
+    "otoya premium",
+    "otoya enhanced",
+    "otoya",
+    "オトヤ",
+    "kyoko premium",
+    "kyoko enhanced",
+    "kyoko",
+    "キョウコ"
+  ];
+
+  for (const preferredName of preferredNames) {
+    const matchedVoice = japaneseVoices.find(voice =>
+      String(voice.name || "").toLowerCase().includes(preferredName.toLowerCase())
+    );
+    if (matchedVoice) return matchedVoice;
+  }
+
+  return japaneseVoices.find(voice => voice.default) || japaneseVoices[0] || null;
+}
+
 function playSound() {
   if (!("speechSynthesis" in window)) return;
 
@@ -836,19 +939,18 @@ function playSound() {
 
   window.speechSynthesis.cancel();
 
-  const speech = new SpeechSynthesisUtterance(item.reading);
-  const voices = window.speechSynthesis.getVoices();
-  const kyoko = voices.find(v => v.name.toLowerCase().includes("kyoko"));
-  const japanese = voices.find(v => v.lang.toLowerCase().startsWith("ja"));
+  // 한자를 포함한 실제 표기를 읽히면 일본어 단어의 억양이 더 자연스러운 경우가 많습니다.
+  const speechText = String(item.word || item.reading || "").trim();
+  const speech = new SpeechSynthesisUtterance(speechText);
 
-  speech.voice = kyoko || japanese || null;
+  speech.voice = getPreferredJapaneseVoice();
   speech.lang = "ja-JP";
-  speech.rate = 0.84;
+  speech.rate = 0.92;
   speech.pitch = 1;
+  speech.volume = 1;
 
   window.speechSynthesis.speak(speech);
 }
-
 soundButton.addEventListener("click", playSound);
 soundTouchArea.addEventListener("click", playSound);
 
