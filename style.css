@@ -1311,3 +1311,17 @@ body.dialog-open {
     min-width: 58px;
   }
 }
+
+
+/* v14.6: 읽는 법과 뜻은 반드시 서로 다른 줄에 표시 */
+.recent-item-reading,
+.recent-item-meaning {
+  display: block !important;
+}
+
+.recent-item-reading::before,
+.recent-item-reading::after,
+.recent-item-meaning::before,
+.recent-item-meaning::after {
+  content: none !important;
+}

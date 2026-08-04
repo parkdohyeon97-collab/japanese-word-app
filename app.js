@@ -1,4 +1,4 @@
-// v14.5: one-click automatic repair plus forced clean list refresh
+// v14.6: normalize raw Firebase items before every list render and force cache refresh
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=145";
+} from "./firebase.js?v=146";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -772,7 +772,15 @@ function removeSavedDuplicates() {
 }
 
 function renderRecentItems() {
-  const items = sharedItems.filter(item => (item.category || "word") === currentCategory);
+  const items = sharedItems
+    .filter(item => (item.category || "word") === currentCategory)
+    .map(item => ({
+      ...normalizeImportedItem(item),
+      id: item.id,
+      shared: true,
+      category: item.category || "word",
+      addedBy: item.addedBy || "도현"
+    }));
   recentWordList.innerHTML = "";
 
   if (!cloudConnected) {
@@ -1772,9 +1780,10 @@ function renderAnnoying() {
     const row = document.createElement("div");
     row.className = "list-item";
     row.innerHTML = `
-      <div>
+      <div class="recent-item-content">
         <strong>${escapeHtml(item.word)}</strong>
-        <span>${escapeHtml(item.reading)} · ${escapeHtml(item.meaning)}</span>
+        <span class="recent-item-reading">${escapeHtml(item.reading)}</span>
+        <span class="recent-item-meaning">${escapeHtml(item.meaning)}</span>
       </div>
       <b>${getWrongCount(item.id)}회</b>
     `;
@@ -2172,8 +2181,15 @@ async function repairMalformedCloudItems(items = sharedItems, showResult = false
     if (showResult) {
       const message = unresolvedCount > 0
         ? `자동 판별이 어려운 항목 ${unresolvedCount}개가 남아 있습니다.`
-        : "고칠 항목이 없습니다. 모두 정상입니다.";
+        : "자동 정리 완료 · 목록을 정상 형식으로 다시 표시했습니다.";
       repairExistingItemsStatus.textContent = message;
+      renderRecentItems();
+
+      if (!screens.sharedList.hidden) {
+        updateSharedOwnerCounts();
+        if (!sharedWordListArea.hidden) renderSharedWordList();
+      }
+
       alert(message);
     }
     return 0;
