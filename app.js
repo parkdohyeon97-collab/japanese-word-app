@@ -1,4 +1,4 @@
-// v12.0: multi-format bulk import with preview and detailed errors
+// v12.1: editable bulk preview before Firebase save
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=120";
+} from "./firebase.js?v=121";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -671,21 +671,56 @@ function parseBulkItems(rawText) {
 let lastBulkPreview = { items: [], errors: [] };
 
 function renderBulkPreview(result) {
-  lastBulkPreview = result;
+  lastBulkPreview = {
+    items: result.items.map(item => ({ ...item })),
+    errors: [...result.errors]
+  };
+
   bulkPreview.hidden = false;
 
-  const preview = result.items.slice(0, 30).map((item, index) => `
-    <div class="bulk-preview-item">
-      <strong>${index + 1}. ${escapeHtml(item.word)}</strong>
-      <span>${escapeHtml(item.reading)}</span>
-      <span>${escapeHtml(item.meaning)}</span>
-    </div>
+  const preview = lastBulkPreview.items.map((item, index) => `
+    <article class="bulk-edit-card" data-index="${index}">
+      <div class="bulk-edit-head">
+        <strong>${index + 1}번째 항목</strong>
+        <span>저장 전 수정 가능</span>
+      </div>
+
+      <label>
+        일본어 한자·표현
+        <input
+          class="bulk-edit-input"
+          data-field="word"
+          value="${escapeHtml(item.word)}"
+          autocomplete="off"
+        >
+      </label>
+
+      <label>
+        읽는 법
+        <input
+          class="bulk-edit-input"
+          data-field="reading"
+          value="${escapeHtml(item.reading)}"
+          autocomplete="off"
+        >
+      </label>
+
+      <label>
+        한국어 뜻
+        <input
+          class="bulk-edit-input"
+          data-field="meaning"
+          value="${escapeHtml(item.meaning)}"
+          autocomplete="off"
+        >
+      </label>
+    </article>
   `).join("");
 
-  const errorHtml = result.errors.length ? `
+  const errorHtml = lastBulkPreview.errors.length ? `
     <details class="bulk-error-details">
-      <summary>형식 오류 ${result.errors.length}개 보기</summary>
-      ${result.errors.map(error => `
+      <summary>형식 오류 ${lastBulkPreview.errors.length}개 보기</summary>
+      ${lastBulkPreview.errors.map(error => `
         <div class="bulk-error-item">
           <strong>${error.lineNumber}번째 줄</strong>
           <span>${escapeHtml(error.text)}</span>
@@ -697,14 +732,59 @@ function renderBulkPreview(result) {
 
   bulkPreview.innerHTML = `
     <div class="bulk-preview-summary">
-      <strong>인식 성공 ${result.items.length}개</strong>
-      <span>형식 오류 ${result.errors.length}개</span>
+      <strong>인식 성공 ${lastBulkPreview.items.length}개</strong>
+      <span>형식 오류 ${lastBulkPreview.errors.length}개</span>
     </div>
-    <div class="bulk-preview-list">${preview || '<p class="help">인식된 항목이 없습니다.</p>'}</div>
+
+    <p class="help">오타가 있으면 아래 칸에서 바로 고친 뒤 저장하세요.</p>
+
+    <div class="bulk-preview-list">
+      ${preview || '<p class="help">인식된 항목이 없습니다.</p>'}
+    </div>
+
     ${errorHtml}
   `;
 
-  saveBulkButton.disabled = result.items.length === 0;
+  bulkPreview.querySelectorAll(".bulk-edit-input").forEach(input => {
+    input.addEventListener("input", event => {
+      const card = event.target.closest(".bulk-edit-card");
+      const index = Number(card.dataset.index);
+      const field = event.target.dataset.field;
+
+      if (!lastBulkPreview.items[index]) return;
+      lastBulkPreview.items[index][field] = event.target.value.trim();
+      updateBulkSaveButtonState();
+    });
+
+    input.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+
+      const inputs = [...bulkPreview.querySelectorAll(".bulk-edit-input")];
+      const currentIndex = inputs.indexOf(event.target);
+      const nextInput = inputs[currentIndex + 1];
+
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      } else if (!saveBulkButton.disabled) {
+        saveBulkButton.focus();
+      }
+    });
+  });
+
+  updateBulkSaveButtonState();
+}
+
+function updateBulkSaveButtonState() {
+  const hasItems = lastBulkPreview.items.length > 0;
+  const allComplete = lastBulkPreview.items.every(item =>
+    String(item.word || "").trim() &&
+    String(item.reading || "").trim() &&
+    String(item.meaning || "").trim()
+  );
+
+  saveBulkButton.disabled = !(hasItems && allComplete);
 }
 
 previewBulkButton.addEventListener("click", () => {
@@ -741,7 +821,18 @@ saveBulkButton.addEventListener("click", async () => {
   const itemsToSave = [];
 
   lastBulkPreview.items.forEach(item => {
-    const key = normalizeDuplicateText(item.word);
+    const cleanedItem = {
+      ...item,
+      word: String(item.word || "").trim(),
+      reading: String(item.reading || "").trim(),
+      meaning: String(item.meaning || "").trim()
+    };
+
+    if (!cleanedItem.word || !cleanedItem.reading || !cleanedItem.meaning) {
+      return;
+    }
+
+    const key = normalizeDuplicateText(cleanedItem.word);
     if (!key || existingKeys.has(key)) {
       duplicateCount += 1;
       return;
@@ -750,7 +841,7 @@ saveBulkButton.addEventListener("click", async () => {
     existingKeys.add(key);
     itemsToSave.push({
       category: currentCategory,
-      ...item,
+      ...cleanedItem,
       addedBy: addedBySelect.value
     });
   });

@@ -976,3 +976,40 @@ body.dialog-open {
 .bulk-error-item small{color:#e4c15e}
 .bulk-ok-message{margin:0;color:var(--teal);font-weight:800}
 @media(max-width:640px){.bulk-preview-item{grid-template-columns:1fr}}
+
+
+.bulk-edit-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.bulk-edit-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.bulk-edit-head strong {
+  color: var(--teal);
+}
+
+.bulk-edit-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bulk-edit-card label {
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.bulk-edit-card input {
+  width: 100%;
+  min-height: 48px;
+}
