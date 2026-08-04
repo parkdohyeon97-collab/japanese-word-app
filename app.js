@@ -1,4 +1,4 @@
-// v11.4: robust repair for numbered Korean-reading-kanji imports without blank Firebase writes
+// v11.4.1: force Safari and Chrome to load the newest app and Firebase code
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js";
+} from "./firebase.js?v=1141";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
