@@ -1,4 +1,4 @@
-// v11: category chapter sizes, two-new-plus-review pattern, randomized study order, Otoya-first TTS
+// v11.2: automatic import cleanup plus one-time repair of already saved Firebase items
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -22,6 +22,7 @@ const MIGRATION_KEY = "jpAppCloudMigrationV9";
 
 let sharedItems = [];
 let cloudConnected = false;
+let cloudRepairInProgress = false;
 
 const defaultWords = [
   { id: "word-1", word: "腕", reading: "うで", meaning: "팔" },
@@ -207,9 +208,89 @@ function saveWrongCounts(counts) {
   saveJson(WRONG_COUNTS_KEY, counts);
 }
 
+
+function stripListNumber(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]\s*/, "")
+    .trim();
+}
+
+function stripOuterSeparators(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^[\s\-–—|/·・]+/, "")
+    .replace(/[\s\-–—|/·・]+$/, "")
+    .trim();
+}
+
+function containsKana(value) {
+  return /[\u3040-\u30ff]/.test(String(value || ""));
+}
+
+function containsJapanese(value) {
+  return /[\u3040-\u30ff\u3400-\u9fff々〆ヵヶ]/.test(String(value || ""));
+}
+
+function containsKorean(value) {
+  return /[\uac00-\ud7a3\u3131-\u318e]/.test(String(value || ""));
+}
+
+function mapThreeParts(parts) {
+  const cleaned = parts.map(part => stripOuterSeparators(stripListNumber(part)));
+  const readingIndex = cleaned.findIndex(containsKana);
+  const koreanIndex = cleaned.findIndex(containsKorean);
+  const japaneseIndex = cleaned.findIndex((part, index) =>
+    index !== readingIndex && containsJapanese(part) && !containsKorean(part)
+  );
+
+  if (readingIndex >= 0 && koreanIndex >= 0 && japaneseIndex >= 0) {
+    return {
+      word: cleaned[japaneseIndex],
+      reading: cleaned[readingIndex],
+      meaning: cleaned[koreanIndex]
+    };
+  }
+
+  // 기본 입력 순서: 일본어 / 히라가나 / 한국어 뜻
+  return {
+    word: cleaned[0],
+    reading: cleaned[1],
+    meaning: cleaned.slice(2).join(" ")
+  };
+}
+
+function normalizeImportedItem(item) {
+  const original = {
+    ...item,
+    word: stripOuterSeparators(item.word),
+    reading: stripOuterSeparators(item.reading),
+    meaning: stripOuterSeparators(item.meaning)
+  };
+
+  // 예전 일괄입력에서 "39. 분해 - ぶんかい - 分解"가
+  // word=39., reading=분해, meaning="- ぶんかい - 分解"로 저장된 경우 자동 복구
+  if (/^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(String(original.word || ""))) {
+    const repairedText = `${original.reading} ${original.meaning}`;
+    const separated = repairedText
+      .split(/\s+(?:-|–|—|\||\/|·|・)\s+/)
+      .map(stripOuterSeparators)
+      .filter(Boolean);
+
+    if (separated.length >= 3) {
+      return { ...original, ...mapThreeParts(separated.slice(0, 3)) };
+    }
+  }
+
+  return {
+    ...original,
+    word: stripListNumber(original.word)
+  };
+}
+
 function getAllItems() {
   const baseWords = defaultWords.map(item => ({ ...item, category: "word" }));
-  const cloudItems = sharedItems.map(item => ({
+  const cloudItems = sharedItems.map(item => normalizeImportedItem({
     ...item,
     category: item.category || "word"
   }));
@@ -481,17 +562,34 @@ function parseBulkItems(rawText) {
   let errorCount = 0;
 
   lines.forEach(line => {
-    const parts = line.split(/\s+/);
+    const withoutNumber = stripListNumber(line);
+
+    // 지원 형식:
+    // 39. 분해 - ぶんかい - 分解
+    // 分解 - ぶんかい - 분해
+    // 分解 / ぶんかい / 분해
+    // 分解 ぶんかい 분해
+    let parts = withoutNumber
+      .split(/\s+(?:-|–|—|\||\/|·|・)\s+/)
+      .map(stripOuterSeparators)
+      .filter(Boolean);
+
+    if (parts.length < 3) {
+      parts = withoutNumber.split(/\s+/).map(stripOuterSeparators).filter(Boolean);
+    }
+
     if (parts.length < 3) {
       errorCount += 1;
       return;
     }
 
-    parsed.push({
-      word: parts[0],
-      reading: parts[1],
-      meaning: parts.slice(2).join(" ")
-    });
+    const mapped = mapThreeParts(parts);
+    if (!mapped.word || !mapped.reading || !mapped.meaning) {
+      errorCount += 1;
+      return;
+    }
+
+    parsed.push(mapped);
   });
 
   return { items: parsed, errorCount };
@@ -1162,6 +1260,50 @@ async function migrateLocalItemsToCloud() {
   );
 }
 
+
+async function repairMalformedCloudItems(items) {
+  if (cloudRepairInProgress) return;
+
+  const repairs = items
+    .map(item => {
+      const normalized = normalizeImportedItem(item);
+      const changed =
+        normalized.word !== item.word ||
+        normalized.reading !== item.reading ||
+        normalized.meaning !== item.meaning;
+
+      return changed
+        ? {
+            id: item.id,
+            word: normalized.word,
+            reading: normalized.reading,
+            meaning: normalized.meaning
+          }
+        : null;
+    })
+    .filter(Boolean);
+
+  if (repairs.length === 0) return;
+
+  cloudRepairInProgress = true;
+
+  try {
+    for (const repair of repairs) {
+      await updateSharedItem(repair.id, {
+        word: repair.word,
+        reading: repair.reading,
+        meaning: repair.meaning
+      });
+    }
+
+    console.log(`잘못 저장된 공유 항목 ${repairs.length}개를 자동 수정했습니다.`);
+  } catch (error) {
+    console.error("공유 항목 자동 수정 실패:", error);
+  } finally {
+    cloudRepairInProgress = false;
+  }
+}
+
 async function startCloudSync() {
   setCloudStatus("로그인 중…", "loading");
 
@@ -1174,6 +1316,9 @@ async function startCloudSync() {
         sharedItems = items;
         cloudConnected = true;
         setCloudStatus("공유 연결됨", "connected");
+
+        // 예전에 번호와 하이픈이 섞인 채 저장된 항목도 Firebase에서 자동 수정합니다.
+        repairMalformedCloudItems(items);
 
         renderHome();
 
