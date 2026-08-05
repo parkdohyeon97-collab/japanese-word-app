@@ -1,4 +1,4 @@
-// v19.1: full duplicate scan across base and shared vocabulary
+// v19.2: restore Japanese pronunciation when tapping the study card
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=191";
+} from "./firebase.js?v=192";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2816,6 +2816,12 @@ testElevenLabsVoiceButton.addEventListener("click", async () => {
   testElevenLabsVoiceButton.textContent = "테스트";
 });
 
+
+soundTouchArea.addEventListener("click", event => {
+  // 버튼이나 입력 요소를 누른 경우에는 발음을 재생하지 않음
+  if (event.target.closest("button, input, select, textarea, a")) return;
+  playSound();
+});
 
 studyAgainButton.addEventListener("click", () => {
   const item = getCurrentItem();
