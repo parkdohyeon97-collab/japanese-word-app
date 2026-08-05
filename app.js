@@ -1,4 +1,4 @@
-// v16.7: keep study screen open when hamburger menu is pressed
+// v16.8: close study to the current chapter selection screen
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=167";
+} from "./firebase.js?v=168";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2360,8 +2360,25 @@ function returnHome() {
   renderHome();
 }
 
-// ☰는 학습 메뉴 전용. 종료는 오른쪽 X 버튼만 담당합니다.
-closeStudyButton.addEventListener("click", returnHome);
+// ☰는 학습 메뉴 전용.
+// 오른쪽 X는 현재 위치를 저장하고 현재 카테고리의 장 선택 화면으로 돌아갑니다.
+closeStudyButton.addEventListener("click", () => {
+  saveChapterProgress();
+  saveRandomReviewProgress();
+
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+
+  // 랜덤복습 중이었다면 랜덤복습 화면으로, 일반 장 학습 중이면 장 선택 화면으로 이동
+  if (studyMode === "random") {
+    renderRandomScreen();
+    showScreen("random");
+    return;
+  }
+
+  renderChapterScreen();
+  showScreen("chapter");
+});
+
 completeHomeButton.addEventListener("click", returnHome);
 
 function setCloudStatus(text, state = "loading") {
