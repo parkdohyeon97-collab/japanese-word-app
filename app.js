@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=170";
+} from "./firebase.js?v=171";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -1897,60 +1897,118 @@ function saveElevenLabsSettings(settings) {
 
 let lockedJapaneseVoiceName = localStorage.getItem("jpAppLockedJapaneseVoiceNameV17") || "";
 
+function isPreferredMaleJapaneseVoice(voice) {
+  const name = String(voice?.name || "");
+  const lang = String(voice?.lang || "").toLowerCase();
+
+  if (!lang.startsWith("ja")) return false;
+
+  return (
+    /siri.*voice\s*1|siri.*1|音声\s*1/i.test(name) ||
+    /otoya|オトヤ/i.test(name)
+  );
+}
+
 function getPreferredJapaneseVoice() {
   const voices = window.speechSynthesis?.getVoices?.() || [];
   const japaneseVoices = voices.filter(voice =>
     String(voice.lang || "").toLowerCase().startsWith("ja")
   );
 
-  if (japaneseVoices.length === 0) return null;
-
+  // 예전 버전에서 여자 음성이 저장되었으면 즉시 삭제
   if (lockedJapaneseVoiceName) {
-    const lockedVoice = japaneseVoices.find(
+    const savedVoice = japaneseVoices.find(
       voice => String(voice.name || "") === lockedJapaneseVoiceName
     );
-    if (lockedVoice) return lockedVoice;
+
+    if (savedVoice && isPreferredMaleJapaneseVoice(savedVoice)) {
+      return savedVoice;
+    }
+
+    const savedNameLooksMale =
+      /siri.*voice\s*1|siri.*1|音声\s*1|otoya|オトヤ/i.test(lockedJapaneseVoiceName);
+
+    if (!savedNameLooksMale) {
+      lockedJapaneseVoiceName = "";
+      localStorage.removeItem("jpAppLockedJapaneseVoiceNameV17");
+    }
   }
 
-  const checks = [
-    voice => /siri.*voice\s*1|siri.*1|音声\s*1/i.test(String(voice.name || "")),
-    voice => /otoya|オトヤ/i.test(String(voice.name || "")) &&
-      /premium|enhanced|高品質/i.test(String(voice.name || "")),
-    voice => /otoya|オトヤ/i.test(String(voice.name || ""))
-  ];
+  const maleVoice =
+    japaneseVoices.find(voice =>
+      /siri.*voice\s*1|siri.*1|音声\s*1/i.test(String(voice.name || ""))
+    ) ||
+    japaneseVoices.find(voice =>
+      /otoya|オトヤ/i.test(String(voice.name || "")) &&
+      /premium|enhanced|高品質/i.test(String(voice.name || ""))
+    ) ||
+    japaneseVoices.find(voice =>
+      /otoya|オトヤ/i.test(String(voice.name || ""))
+    );
 
-  let selectedVoice = null;
-
-  for (const check of checks) {
-    selectedVoice = japaneseVoices.find(check);
-    if (selectedVoice) break;
-  }
-
-  selectedVoice ||= japaneseVoices.find(voice => voice.default) || japaneseVoices[0];
-
-  if (selectedVoice) {
-    lockedJapaneseVoiceName = String(selectedVoice.name || "");
+  if (maleVoice) {
+    lockedJapaneseVoiceName = String(maleVoice.name || "");
     localStorage.setItem("jpAppLockedJapaneseVoiceNameV17", lockedJapaneseVoiceName);
+    return maleVoice;
   }
 
-  return selectedVoice;
+  // 남자 음성이 잠깐 목록에서 빠졌을 때 여자 음성으로 덮어쓰지 않음
+  return null;
 }
 
-function playBrowserJapanese(text) {
-  if (!("speechSynthesis" in window)) return;
+function waitForPreferredJapaneseVoice(timeoutMs = 2400) {
+  return new Promise(resolve => {
+    const startedAt = Date.now();
+
+    function check() {
+      const voice = getPreferredJapaneseVoice();
+
+      if (voice) {
+        resolve(voice);
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        resolve(null);
+        return;
+      }
+
+      window.setTimeout(check, 150);
+    }
+
+    check();
+  });
+}
+
+async function playBrowserJapanese(text) {
+  if (!("speechSynthesis" in window)) return false;
+
+  const voice = await waitForPreferredJapaneseVoice();
+
+  if (!voice) {
+    console.warn("일본어 남자 음성을 찾지 못했습니다. 여자 음성으로 대체하지 않습니다.");
+    ttsSettingsStatus.textContent =
+      "Siri 음성 1 또는 Otoya를 불러오지 못했습니다. Safari를 완전히 종료한 뒤 다시 열어 주세요.";
+    return false;
+  }
+
   window.speechSynthesis.cancel();
+
   const speech = new SpeechSynthesisUtterance(text);
-  speech.voice = getPreferredJapaneseVoice();
+  speech.voice = voice;
   speech.lang = "ja-JP";
   speech.rate = 0.92;
   speech.pitch = 1;
   speech.volume = 1;
+
   window.speechSynthesis.speak(speech);
+  return true;
 }
 
 if ("speechSynthesis" in window) {
   window.speechSynthesis.addEventListener?.("voiceschanged", () => {
-    if (!lockedJapaneseVoiceName) getPreferredJapaneseVoice();
+    // 목록 갱신 시 남자 음성이 보이면 미리 잠그되, 여자 음성으로는 절대 변경하지 않음
+    getPreferredJapaneseVoice();
   });
 }
 
@@ -1998,7 +2056,7 @@ async function playElevenLabsText(text, { allowFallback = true } = {}) {
 
   if (!settings.apiKey || !settings.voiceId) {
     if (allowFallback) {
-      playBrowserJapanese(text);
+      await playBrowserJapanese(text);
       ttsSettingsStatus.textContent = "ElevenLabs 설정이 없어 아이폰 기본 음성으로 재생했습니다.";
     }
     return false;
@@ -2021,7 +2079,7 @@ async function playElevenLabsText(text, { allowFallback = true } = {}) {
   } catch (error) {
     console.error("ElevenLabs 재생 실패:", error);
     if (allowFallback) {
-      playBrowserJapanese(text);
+      await playBrowserJapanese(text);
       alert("ElevenLabs 음성을 불러오지 못해서 아이폰 기본 음성으로 재생했습니다.\n설정의 API 키와 목소리를 확인해 주세요.");
     }
     return false;
