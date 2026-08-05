@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=168";
+} from "./firebase.js?v=170";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -1895,28 +1895,45 @@ function saveElevenLabsSettings(settings) {
   localStorage.setItem(ELEVENLABS_SETTINGS_KEY, JSON.stringify(settings));
 }
 
+let lockedJapaneseVoiceName = localStorage.getItem("jpAppLockedJapaneseVoiceNameV17") || "";
+
 function getPreferredJapaneseVoice() {
   const voices = window.speechSynthesis?.getVoices?.() || [];
   const japaneseVoices = voices.filter(voice =>
     String(voice.lang || "").toLowerCase().startsWith("ja")
   );
 
-  const preferredNames = [
-    "siri voice 1","siri 1","siri male","siri",
-    "otoya premium", "otoya enhanced", "otoya", "オトヤ",
-    "kyoko premium", "kyoko enhanced", "kyoko", "キョウコ"
-  ];
+  if (japaneseVoices.length === 0) return null;
 
-  console.table(japaneseVoices.map(v=>({name:v.name,lang:v.lang,default:v.default})));
-
-  for (const preferredName of preferredNames) {
-    const matchedVoice = japaneseVoices.find(voice =>
-      String(voice.name || "").toLowerCase().includes(preferredName.toLowerCase())
+  if (lockedJapaneseVoiceName) {
+    const lockedVoice = japaneseVoices.find(
+      voice => String(voice.name || "") === lockedJapaneseVoiceName
     );
-    if (matchedVoice) return matchedVoice;
+    if (lockedVoice) return lockedVoice;
   }
 
-  return japaneseVoices.find(voice => voice.default) || japaneseVoices[0] || null;
+  const checks = [
+    voice => /siri.*voice\s*1|siri.*1|音声\s*1/i.test(String(voice.name || "")),
+    voice => /otoya|オトヤ/i.test(String(voice.name || "")) &&
+      /premium|enhanced|高品質/i.test(String(voice.name || "")),
+    voice => /otoya|オトヤ/i.test(String(voice.name || ""))
+  ];
+
+  let selectedVoice = null;
+
+  for (const check of checks) {
+    selectedVoice = japaneseVoices.find(check);
+    if (selectedVoice) break;
+  }
+
+  selectedVoice ||= japaneseVoices.find(voice => voice.default) || japaneseVoices[0];
+
+  if (selectedVoice) {
+    lockedJapaneseVoiceName = String(selectedVoice.name || "");
+    localStorage.setItem("jpAppLockedJapaneseVoiceNameV17", lockedJapaneseVoiceName);
+  }
+
+  return selectedVoice;
 }
 
 function playBrowserJapanese(text) {
@@ -1929,6 +1946,12 @@ function playBrowserJapanese(text) {
   speech.pitch = 1;
   speech.volume = 1;
   window.speechSynthesis.speak(speech);
+}
+
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+    if (!lockedJapaneseVoiceName) getPreferredJapaneseVoice();
+  });
 }
 
 async function requestElevenLabsAudio(text, settings) {
