@@ -1,4 +1,4 @@
-// v16.6: left drawer study menu and one-way meaning reveal
+// v16.7: keep study screen open when hamburger menu is pressed
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=166";
+} from "./firebase.js?v=167";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2360,7 +2360,7 @@ function returnHome() {
   renderHome();
 }
 
-exitStudyButton.addEventListener("click", returnHome);
+// ☰는 학습 메뉴 전용. 종료는 오른쪽 X 버튼만 담당합니다.
 closeStudyButton.addEventListener("click", returnHome);
 completeHomeButton.addEventListener("click", returnHome);
 
