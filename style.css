@@ -1520,3 +1520,73 @@ body.dialog-open {
     min-height: 360px;
   }
 }
+
+
+/* v16.1 홈 캐러셀 정리 */
+#homeScreen .category-list {
+  gap: 16px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  scroll-padding-inline: 0 !important;
+}
+
+#homeScreen .category-book {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+#homeScreen .category-book:active {
+  transform: scale(0.985) !important;
+}
+
+/* 카드 안의 화살표/원형 이동 장식 숨김 */
+#homeScreen .category-book .book-arrow,
+#homeScreen .category-book .category-arrow,
+#homeScreen .category-book .slide-arrow,
+#homeScreen .category-book > b,
+#homeScreen .category-book::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 카드 텍스트는 완전 중앙 정렬 */
+#homeScreen .category-book {
+  grid-template-columns: 1fr !important;
+  justify-items: center !important;
+  align-items: center !important;
+}
+
+#homeScreen .book-title {
+  margin: 0 !important;
+  text-align: center !important;
+}
+
+/* 모바일에서 옆 카드가 평소에 보이지 않도록 */
+@media (max-width: 719px) {
+  #homeScreen .category-list {
+    overflow-x: auto !important;
+  }
+
+  #homeScreen .category-book {
+    flex-basis: 100% !important;
+  }
+}
+
+/* 큰 화면에서도 한 장 중심 */
+@media (min-width: 720px) {
+  #homeScreen .category-list {
+    padding-inline: 0 !important;
+    margin-inline: 0 !important;
+  }
+
+  #homeScreen .category-book {
+    flex-basis: 100% !important;
+    max-width: 100% !important;
+  }
+}

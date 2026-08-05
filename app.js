@@ -1,4 +1,4 @@
-// v16.0: swipeable home category carousel with iOS-style snap and page dots
+// v16.1: show one clean category card at a time and remove arrow decoration
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=160";
+} from "./firebase.js?v=161";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
