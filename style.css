@@ -1978,3 +1978,75 @@ body.study-menu-open {
   color: #f0c455 !important;
   font-weight: 800;
 }
+
+
+/* v19.1 전체 중복 전수검사 */
+.duplicate-scan-button {
+  border-color: rgba(110, 185, 204, 0.42);
+}
+
+.duplicate-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.duplicate-scan-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.danger-outline-button {
+  border-color: rgba(255, 106, 106, 0.45) !important;
+  color: #ff9a9a !important;
+}
+
+.duplicate-result-item {
+  align-items: center;
+}
+
+.duplicate-reason {
+  display: block;
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.duplicate-reason.safe {
+  color: #7fd8a4;
+}
+
+.duplicate-reason.review {
+  color: #f0c455;
+}
+
+.reading-duplicate-group {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.025);
+}
+
+.reading-duplicate-group + .reading-duplicate-group {
+  margin-top: 10px;
+}
+
+.reading-duplicate-group > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--teal);
+}
+
+.reading-duplicate-group div {
+  display: grid;
+  gap: 6px;
+}
+
+.reading-duplicate-group span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+@media (max-width: 620px) {
+  .duplicate-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

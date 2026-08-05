@@ -1,4 +1,4 @@
-// v19.0: graduate known words and exclude them from normal study
+// v19.1: full duplicate scan across base and shared vocabulary
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=190";
+} from "./firebase.js?v=191";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -99,7 +99,8 @@ const screens = {
   search: document.getElementById("searchScreen"),
   random: document.getElementById("randomScreen"),
   sharedList: document.getElementById("sharedListScreen"),
-  graduated: document.getElementById("graduatedScreen")
+  graduated: document.getElementById("graduatedScreen"),
+  duplicateScan: document.getElementById("duplicateScanScreen")
 };
 
 const categoryTitle = document.getElementById("categoryTitle");
@@ -183,6 +184,17 @@ const recentWordList = document.getElementById("recentWordList");
 const addedBySelect = document.getElementById("addedBySelect");
 const cloudStatus = document.getElementById("cloudStatus");
 const repairExistingItemsButton = document.getElementById("repairExistingItemsButton");
+const scanAllDuplicatesButton = document.getElementById("scanAllDuplicatesButton");
+const closeDuplicateScanButton = document.getElementById("closeDuplicateScanButton");
+const runDuplicateScanButton = document.getElementById("runDuplicateScanButton");
+const deleteSafeDuplicatesButton = document.getElementById("deleteSafeDuplicatesButton");
+const duplicateScanStatus = document.getElementById("duplicateScanStatus");
+const baseDuplicateCount = document.getElementById("baseDuplicateCount");
+const sharedDuplicateCount = document.getElementById("sharedDuplicateCount");
+const readingDuplicateCount = document.getElementById("readingDuplicateCount");
+const baseDuplicateList = document.getElementById("baseDuplicateList");
+const sharedDuplicateList = document.getElementById("sharedDuplicateList");
+const readingDuplicateList = document.getElementById("readingDuplicateList");
 const repairExistingItemsStatus = document.getElementById("repairExistingItemsStatus");
 const openUnresolvedItemsButton = document.getElementById("openUnresolvedItemsButton");
 const unresolvedScreen = document.getElementById("unresolvedScreen");
@@ -1099,6 +1111,307 @@ function removeSavedDuplicates() {
   if (removed > 0) saveUserItems(cleaned);
   return removed;
 }
+
+
+let latestDuplicateScan = {
+  baseDuplicates: [],
+  sharedDuplicates: [],
+  readingDuplicates: [],
+  safeDeleteIds: []
+};
+
+function normalizeDuplicateReading(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s　・･\-ー]/g, "")
+    .toLocaleLowerCase("ja");
+}
+
+function getExactDuplicateKey(item) {
+  return [
+    item.category || "word",
+    normalizeDuplicateText(item.word),
+    normalizeDuplicateReading(item.reading)
+  ].join("::");
+}
+
+function getWordDuplicateKey(item) {
+  return [
+    item.category || "word",
+    normalizeDuplicateText(item.word)
+  ].join("::");
+}
+
+function createFullDuplicateReport() {
+  const baseItems = defaultWords.map(item => ({
+    ...item,
+    category: "word",
+    source: "base"
+  }));
+
+  const cloudItems = sharedItems
+    .map(item => ({
+      ...normalizeImportedItem(item),
+      id: item.id,
+      category: item.category || "word",
+      addedBy: item.addedBy || "이름 없음",
+      source: "cloud"
+    }))
+    .filter(item => item.word && item.reading && item.meaning);
+
+  const baseByWord = new Map();
+  const baseByExact = new Map();
+
+  baseItems.forEach(item => {
+    baseByWord.set(getWordDuplicateKey(item), item);
+    baseByExact.set(getExactDuplicateKey(item), item);
+  });
+
+  const baseDuplicates = [];
+  const sharedDuplicates = [];
+  const readingDuplicates = [];
+  const safeDeleteIds = [];
+
+  cloudItems.forEach(item => {
+    const exactBase = baseByExact.get(getExactDuplicateKey(item));
+    const sameWordBase = baseByWord.get(getWordDuplicateKey(item));
+
+    if (exactBase || sameWordBase) {
+      const baseItem = exactBase || sameWordBase;
+      const exact = Boolean(exactBase);
+
+      baseDuplicates.push({
+        baseItem,
+        cloudItem: item,
+        exact,
+        reason: exact
+          ? "한자와 읽기가 모두 같은 확실한 중복"
+          : "한자는 같고 읽기 또는 뜻이 다른 항목"
+      });
+
+      if (exact && item.id) safeDeleteIds.push(String(item.id));
+    }
+  });
+
+  const groupedByExact = new Map();
+
+  cloudItems.forEach(item => {
+    const key = getExactDuplicateKey(item);
+    if (!groupedByExact.has(key)) groupedByExact.set(key, []);
+    groupedByExact.get(key).push(item);
+  });
+
+  groupedByExact.forEach(group => {
+    if (group.length < 2) return;
+
+    const keep = group[0];
+    const duplicates = group.slice(1);
+
+    sharedDuplicates.push({
+      keep,
+      duplicates,
+      exact: true
+    });
+
+    duplicates.forEach(item => {
+      if (item.id) safeDeleteIds.push(String(item.id));
+    });
+  });
+
+  const readingGroups = new Map();
+
+  cloudItems
+    .filter(item => (item.category || "word") === "word")
+    .forEach(item => {
+      const readingKey = normalizeDuplicateReading(item.reading);
+      if (!readingKey) return;
+      if (!readingGroups.has(readingKey)) readingGroups.set(readingKey, []);
+      readingGroups.get(readingKey).push(item);
+    });
+
+  readingGroups.forEach(group => {
+    const uniqueWords = new Set(group.map(item => normalizeDuplicateText(item.word)));
+    if (group.length >= 2 && uniqueWords.size >= 2) {
+      readingDuplicates.push({
+        reading: group[0].reading,
+        items: group
+      });
+    }
+  });
+
+  return {
+    baseDuplicates,
+    sharedDuplicates,
+    readingDuplicates,
+    safeDeleteIds: [...new Set(safeDeleteIds)]
+  };
+}
+
+function makeDuplicateRow(item, extraHtml = "", deleteHandler = null) {
+  const row = document.createElement("div");
+  row.className = "list-item duplicate-result-item";
+  row.innerHTML = `
+    <div class="recent-item-content">
+      <strong>${escapeHtml(item.word)}</strong>
+      <span class="recent-item-reading">${escapeHtml(item.reading)}</span>
+      <span class="recent-item-meaning">${escapeHtml(item.meaning)}</span>
+      ${extraHtml}
+    </div>
+    ${deleteHandler ? '<button class="recent-delete-button" type="button">삭제</button>' : ""}
+  `;
+
+  if (deleteHandler) {
+    row.querySelector(".recent-delete-button").addEventListener("click", deleteHandler);
+  }
+
+  return row;
+}
+
+async function deleteDuplicateItem(id) {
+  if (!id) return;
+  if (!confirm("이 중복 항목을 공유 단어장에서 삭제할까요?")) return;
+
+  try {
+    await removeSharedItem(id);
+    duplicateScanStatus.textContent = "삭제 완료 · 목록을 다시 검사합니다.";
+    window.setTimeout(renderDuplicateScan, 250);
+  } catch (error) {
+    console.error(error);
+    alert("삭제하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+  }
+}
+
+function renderDuplicateScan() {
+  if (!cloudConnected) {
+    duplicateScanStatus.textContent = "공유 단어장 연결이 끝난 뒤 다시 검사해 주세요.";
+    return;
+  }
+
+  latestDuplicateScan = createFullDuplicateReport();
+
+  baseDuplicateCount.textContent = latestDuplicateScan.baseDuplicates.length;
+  sharedDuplicateCount.textContent = latestDuplicateScan.sharedDuplicates
+    .reduce((sum, group) => sum + group.duplicates.length, 0);
+  readingDuplicateCount.textContent = latestDuplicateScan.readingDuplicates.length;
+
+  deleteSafeDuplicatesButton.disabled = latestDuplicateScan.safeDeleteIds.length === 0;
+
+  baseDuplicateList.innerHTML = "";
+  sharedDuplicateList.innerHTML = "";
+  readingDuplicateList.innerHTML = "";
+
+  if (latestDuplicateScan.baseDuplicates.length === 0) {
+    baseDuplicateList.innerHTML = '<div class="empty-box">기본 단어와 겹치는 추가 단어가 없습니다.</div>';
+  } else {
+    latestDuplicateScan.baseDuplicates.forEach(result => {
+      const extra = `
+        <small class="duplicate-reason ${result.exact ? "safe" : "review"}">
+          ${escapeHtml(result.reason)} · 기본 뜻: ${escapeHtml(result.baseItem.meaning)}
+        </small>
+      `;
+      baseDuplicateList.appendChild(
+        makeDuplicateRow(
+          result.cloudItem,
+          extra,
+          result.cloudItem.id ? () => deleteDuplicateItem(result.cloudItem.id) : null
+        )
+      );
+    });
+  }
+
+  if (latestDuplicateScan.sharedDuplicates.length === 0) {
+    sharedDuplicateList.innerHTML = '<div class="empty-box">추가 단어끼리의 확실한 중복이 없습니다.</div>';
+  } else {
+    latestDuplicateScan.sharedDuplicates.forEach(group => {
+      group.duplicates.forEach(item => {
+        const extra = `
+          <small class="duplicate-reason safe">
+            같은 단어를 ${group.duplicates.length + 1}번 저장함 · 남길 항목: ${escapeHtml(group.keep.addedBy || "이름 없음")}
+          </small>
+        `;
+        sharedDuplicateList.appendChild(
+          makeDuplicateRow(item, extra, () => deleteDuplicateItem(item.id))
+        );
+      });
+    });
+  }
+
+  if (latestDuplicateScan.readingDuplicates.length === 0) {
+    readingDuplicateList.innerHTML = '<div class="empty-box">읽기만 같은 다른 단어가 없습니다.</div>';
+  } else {
+    latestDuplicateScan.readingDuplicates.forEach(group => {
+      const box = document.createElement("article");
+      box.className = "reading-duplicate-group";
+      box.innerHTML = `
+        <strong>${escapeHtml(group.reading)}</strong>
+        <div>
+          ${group.items.map(item =>
+            `<span>${escapeHtml(item.word)} · ${escapeHtml(item.meaning)}</span>`
+          ).join("")}
+        </div>
+      `;
+      readingDuplicateList.appendChild(box);
+    });
+  }
+
+  const exactBaseCount = latestDuplicateScan.baseDuplicates.filter(item => item.exact).length;
+  const sharedExactCount = latestDuplicateScan.sharedDuplicates
+    .reduce((sum, group) => sum + group.duplicates.length, 0);
+
+  duplicateScanStatus.textContent =
+    `검사 완료 · 확실한 자동 삭제 후보 ${latestDuplicateScan.safeDeleteIds.length}개` +
+    ` (기본 중복 ${exactBaseCount}개, 추가 단어 중복 ${sharedExactCount}개)`;
+}
+
+async function deleteAllSafeDuplicates() {
+  const ids = latestDuplicateScan.safeDeleteIds;
+
+  if (ids.length === 0) {
+    alert("자동 삭제할 확실한 중복이 없습니다.");
+    return;
+  }
+
+  if (!confirm(
+    `한자와 읽기가 같은 확실한 중복 ${ids.length}개를 전부 삭제할까요?\n` +
+    `읽기만 같은 다른 단어는 삭제하지 않습니다.`
+  )) return;
+
+  deleteSafeDuplicatesButton.disabled = true;
+  deleteSafeDuplicatesButton.textContent = "삭제 중…";
+
+  let deleted = 0;
+  let failed = 0;
+
+  for (const id of ids) {
+    try {
+      await removeSharedItem(id);
+      deleted += 1;
+    } catch (error) {
+      console.error(error);
+      failed += 1;
+    }
+  }
+
+  deleteSafeDuplicatesButton.textContent = "확실한 중복 모두 삭제";
+  duplicateScanStatus.textContent = `삭제 완료 ${deleted}개 · 실패 ${failed}개`;
+
+  window.setTimeout(renderDuplicateScan, 400);
+}
+
+scanAllDuplicatesButton?.addEventListener("click", () => {
+  showScreen("duplicateScan");
+  renderDuplicateScan();
+});
+
+closeDuplicateScanButton?.addEventListener("click", () => {
+  configureAddScreenForCategory();
+  renderRecentItems();
+  showScreen("add");
+});
+
+runDuplicateScanButton?.addEventListener("click", renderDuplicateScan);
+deleteSafeDuplicatesButton?.addEventListener("click", deleteAllSafeDuplicates);
 
 function renderRecentItems() {
   const items = sharedItems
@@ -3258,6 +3571,7 @@ async function startCloudSync() {
         if (!screens.chapter.hidden) renderChapterScreen();
         if (!screens.add.hidden) renderRecentItems();
         if (!screens.search.hidden) renderSearchResults();
+        if (!screens.duplicateScan.hidden) renderDuplicateScan();
         if (!screens.sharedList.hidden) {
           updateSharedOwnerCounts();
           if (!sharedWordListArea.hidden) renderSharedWordList();

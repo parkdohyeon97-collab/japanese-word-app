@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f1113">
   <title>일본어 학습 앱</title>
-  <link rel="stylesheet" href="style.css?v=190">
+  <link rel="stylesheet" href="style.css?v=191">
 </head>
 <body>
   <main id="app">
@@ -260,6 +260,9 @@
           <p class="help">번호·하이픈 때문에 잘못 저장된 기존 항목을 한 번에 바로잡습니다.</p>
         </div>
         <button id="repairExistingItemsButton" class="secondary-button" type="button">기존 단어 검사·복구</button>
+        <button id="scanAllDuplicatesButton" class="secondary-button duplicate-scan-button" type="button">
+          전체 중복 전수검사
+        </button>
         <button id="openUnresolvedItemsButton" class="secondary-button unresolved-button" type="button" hidden>
           미확정 항목만 보기
         </button>
@@ -296,6 +299,58 @@
       <section class="section-block">
         <div class="section-title"><h2>직접 추가한 항목</h2></div>
         <div id="recentWordList" class="list"></div>
+      </section>
+    </section>
+
+
+    <!-- 전체 중복 전수검사 -->
+    <section id="duplicateScanScreen" class="screen" hidden>
+      <header class="page-header">
+        <button id="closeDuplicateScanButton" class="back-button" type="button">←</button>
+        <div>
+          <p class="eyebrow">기본 단어 · 공유 추가 단어 전체 비교</p>
+          <h2>중복 전수검사</h2>
+        </div>
+        <div></div>
+      </header>
+
+      <section class="summary-grid duplicate-summary-grid">
+        <article class="summary-card">
+          <span>기본 단어와 중복</span>
+          <strong id="baseDuplicateCount">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>추가 단어끼리 중복</span>
+          <strong id="sharedDuplicateCount">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>읽기만 같은 항목</span>
+          <strong id="readingDuplicateCount">0</strong>
+        </article>
+      </section>
+
+      <section class="panel duplicate-scan-actions">
+        <button id="runDuplicateScanButton" class="primary-button" type="button">다시 전수검사</button>
+        <button id="deleteSafeDuplicatesButton" class="secondary-button danger-outline-button" type="button" disabled>
+          확실한 중복 모두 삭제
+        </button>
+        <p id="duplicateScanStatus" class="help">전수검사를 시작합니다.</p>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title"><h2>기본 50개와 겹치는 추가 단어</h2></div>
+        <div id="baseDuplicateList" class="list"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title"><h2>추가 단어끼리 겹치는 항목</h2></div>
+        <div id="sharedDuplicateList" class="list"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title"><h2>읽기는 같지만 한자가 다른 항목</h2></div>
+        <p class="help">동음이의어일 수 있으므로 자동 삭제하지 않습니다.</p>
+        <div id="readingDuplicateList" class="list"></div>
       </section>
     </section>
 
@@ -478,7 +533,7 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=190"></script>
+  <script type="module" src="app.js?v=191"></script>
 
 <div id="studyMenuSheet" class="study-menu-sheet" hidden>
   <button id="studyMenuBackdrop" class="study-menu-backdrop" type="button" aria-label="학습 메뉴 닫기"></button>
