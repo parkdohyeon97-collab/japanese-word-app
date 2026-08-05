@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f1113">
   <title>일본어 학습 앱</title>
-  <link rel="stylesheet" href="style.css?v=150">
+  <link rel="stylesheet" href="style.css?v=160">
 </head>
 <body>
   <main id="app">
@@ -47,6 +47,13 @@
           <span class="book-title review-title">N5~N3<br>추가단어</span>
           <span id="reviewCategoryCount" class="book-count">0개</span>
         </button>
+      </div>
+
+      <div id="homeCarouselDots" class="home-carousel-dots" aria-label="목차 페이지">
+        <button class="home-carousel-dot active" type="button" data-home-slide="0" aria-label="단어"></button>
+        <button class="home-carousel-dot" type="button" data-home-slide="1" aria-label="문법"></button>
+        <button class="home-carousel-dot" type="button" data-home-slide="2" aria-label="회화"></button>
+        <button class="home-carousel-dot" type="button" data-home-slide="3" aria-label="N5~N3 추가단어"></button>
       </div>
 
       <button id="openRandomButton" class="random-home-card" type="button">
@@ -413,6 +420,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=150"></script>
+  <script type="module" src="app.js?v=160"></script>
 </body>
 </html>

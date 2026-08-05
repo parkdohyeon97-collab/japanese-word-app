@@ -1,4 +1,4 @@
-// v15.0: save and resume the exact study position for every chapter
+// v16.0: swipeable home category carousel with iOS-style snap and page dots
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=150";
+} from "./firebase.js?v=160";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -106,6 +106,8 @@ const grammarCategoryCount = document.getElementById("grammarCategoryCount");
 const conversationCategoryCount = document.getElementById("conversationCategoryCount");
 const reviewCategoryCount = document.getElementById("reviewCategoryCount");
 const annoyingMenuCount = document.getElementById("annoyingMenuCount");
+const categoryList = document.getElementById("categoryList");
+const homeCarouselDots = [...document.querySelectorAll(".home-carousel-dot")];
 const resumeStatusElements = {
   word: document.getElementById("wordResumeStatus"),
   grammar: document.getElementById("grammarResumeStatus"),
@@ -698,6 +700,48 @@ function getAnnoyingItems(category = currentCategory) {
     .sort((a, b) => getWrongCount(b.id) - getWrongCount(a.id));
 }
 
+
+function updateHomeCarouselDots() {
+  if (!categoryList || homeCarouselDots.length === 0) return;
+
+  const cards = [...categoryList.querySelectorAll(".category-book")];
+  if (cards.length === 0) return;
+
+  const center = categoryList.scrollLeft + categoryList.clientWidth / 2;
+  let activeIndex = 0;
+  let closestDistance = Infinity;
+
+  cards.forEach((card, index) => {
+    const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+    const distance = Math.abs(cardCenter - center);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      activeIndex = index;
+    }
+  });
+
+  homeCarouselDots.forEach((dot, index) => {
+    const active = index === activeIndex;
+    dot.classList.toggle("active", active);
+    dot.setAttribute("aria-current", active ? "true" : "false");
+  });
+}
+
+function scrollHomeCarouselTo(index) {
+  if (!categoryList) return;
+
+  const cards = [...categoryList.querySelectorAll(".category-book")];
+  const target = cards[index];
+  if (!target) return;
+
+  target.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest",
+    inline: "center"
+  });
+}
+
 function showScreen(name) {
   Object.values(screens).forEach(screen => screen.hidden = true);
   screens[name].hidden = false;
@@ -712,6 +756,7 @@ function renderHome() {
   randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
   randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
   updateSharedOwnerCounts();
+  requestAnimationFrame(updateHomeCarouselDots);
 
   Object.entries(resumeStatusElements).forEach(([category, element]) => {
     if (!element) return;
@@ -2039,6 +2084,25 @@ clearSearchButton.addEventListener("click", () => {
 });
 
 searchInput.addEventListener("input", renderSearchResults);
+
+if (categoryList) {
+  let homeCarouselFrame = null;
+
+  categoryList.addEventListener("scroll", () => {
+    if (homeCarouselFrame) cancelAnimationFrame(homeCarouselFrame);
+
+    homeCarouselFrame = requestAnimationFrame(() => {
+      updateHomeCarouselDots();
+      homeCarouselFrame = null;
+    });
+  }, { passive: true });
+}
+
+homeCarouselDots.forEach(dot => {
+  dot.addEventListener("click", () => {
+    scrollHomeCarouselTo(Number(dot.dataset.homeSlide));
+  });
+});
 
 document.querySelectorAll(".category-book").forEach(button => {
   button.addEventListener("click", () => {

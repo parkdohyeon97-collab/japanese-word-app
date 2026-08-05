@@ -1378,3 +1378,145 @@ body.dialog-open {
   font-size: 12px !important;
   font-weight: 800 !important;
 }
+
+
+/* v16.0 홈 목차 스와이프 UI */
+#homeScreen .category-list {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 8px -18px 0;
+  padding: 10px 24px 18px;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 24px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+#homeScreen .category-list::-webkit-scrollbar {
+  display: none;
+}
+
+#homeScreen .category-book {
+  flex: 0 0 calc(100% - 48px);
+  min-height: 300px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 30px;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  transform: scale(0.985);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+#homeScreen .category-book:active {
+  transform: scale(0.965);
+}
+
+#homeScreen .category-book::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+#homeScreen .category-book[data-category="word"]::before {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(74, 139, 255, 0.28), transparent 42%),
+    linear-gradient(145deg, rgba(38, 91, 162, 0.28), rgba(17, 20, 26, 0.76));
+}
+
+#homeScreen .category-book[data-category="grammar"]::before {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(79, 191, 132, 0.25), transparent 42%),
+    linear-gradient(145deg, rgba(31, 111, 72, 0.25), rgba(17, 20, 26, 0.76));
+}
+
+#homeScreen .category-book[data-category="conversation"]::before {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(239, 162, 75, 0.27), transparent 42%),
+    linear-gradient(145deg, rgba(150, 86, 27, 0.24), rgba(17, 20, 26, 0.76));
+}
+
+#homeScreen .category-book[data-category="review"]::before {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(173, 106, 245, 0.27), transparent 42%),
+    linear-gradient(145deg, rgba(94, 49, 151, 0.25), rgba(17, 20, 26, 0.76));
+}
+
+#homeScreen .book-spine,
+#homeScreen .book-count,
+#homeScreen .book-resume-status {
+  display: none !important;
+}
+
+#homeScreen .book-title {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(34px, 10vw, 52px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  text-align: center;
+  color: #f7f7f8;
+  text-shadow: 0 5px 22px rgba(0, 0, 0, 0.32);
+}
+
+#homeScreen .book-title.review-title {
+  line-height: 1.22;
+}
+
+.home-carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  min-height: 30px;
+  margin: 0 0 14px;
+}
+
+.home-carousel-dot {
+  width: 7px;
+  height: 7px;
+  min-width: 7px;
+  min-height: 7px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.27);
+  transition:
+    width 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.home-carousel-dot.active {
+  width: 22px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+@media (min-width: 720px) {
+  #homeScreen .category-list {
+    margin-inline: -26px;
+    padding-inline: 52px;
+  }
+
+  #homeScreen .category-book {
+    flex-basis: min(620px, calc(100% - 120px));
+    min-height: 360px;
+  }
+}
