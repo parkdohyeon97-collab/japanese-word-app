@@ -1,4 +1,4 @@
-// v18.1: add a global smooth scroll-to-top button for every tab and screen
+// v19.0: graduate known words and exclude them from normal study
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=181";
+} from "./firebase.js?v=190";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -22,6 +22,7 @@ const MIGRATION_KEY = "jpAppCloudMigrationV9";
 const STUDY_PROGRESS_KEY = "jpAppStudyProgressV15";
 const RANDOM_REVIEW_HISTORY_KEY = "jpAppRandomReviewHistoryV163";
 const RANDOM_REVIEW_PROGRESS_KEY = "jpAppRandomReviewProgressV164";
+const GRADUATED_ITEMS_KEY = "jpAppGraduatedItemsV19";
 
 let sharedItems = [];
 let cloudConnected = false;
@@ -97,7 +98,8 @@ const screens = {
   unresolved: document.getElementById("unresolvedScreen"),
   search: document.getElementById("searchScreen"),
   random: document.getElementById("randomScreen"),
-  sharedList: document.getElementById("sharedListScreen")
+  sharedList: document.getElementById("sharedListScreen"),
+  graduated: document.getElementById("graduatedScreen")
 };
 
 const categoryTitle = document.getElementById("categoryTitle");
@@ -108,6 +110,12 @@ const grammarCategoryCount = document.getElementById("grammarCategoryCount");
 const conversationCategoryCount = document.getElementById("conversationCategoryCount");
 const reviewCategoryCount = document.getElementById("reviewCategoryCount");
 const annoyingMenuCount = document.getElementById("annoyingMenuCount");
+const graduatedMenuCount = document.getElementById("graduatedMenuCount");
+const openGraduatedButton = document.getElementById("openGraduatedButton");
+const closeGraduatedButton = document.getElementById("closeGraduatedButton");
+const graduatedTotalCount = document.getElementById("graduatedTotalCount");
+const graduatedWordList = document.getElementById("graduatedWordList");
+const studyGraduatedButton = document.getElementById("studyGraduatedButton");
 const categoryList = document.getElementById("categoryList");
 const homeCarouselDots = [...document.querySelectorAll(".home-carousel-dot")];
 const resumeStatusElements = {
@@ -191,7 +199,7 @@ const readingElement = document.getElementById("reading");
 const meaningElement = document.getElementById("meaning");
 const wrongCountBadge = document.getElementById("wrongCountBadge");
 const soundTouchArea = document.getElementById("soundTouchArea");
-const soundButton = document.getElementById("soundButton");
+const graduateCurrentButton = document.getElementById("graduateCurrentButton");
 const ttsSettingsButton = document.getElementById("ttsSettingsButton");
 const ttsSettingsDialog = document.getElementById("ttsSettingsDialog");
 const ttsSettingsForm = document.getElementById("ttsSettingsForm");
@@ -270,6 +278,50 @@ function getWrongCounts() {
 
 function saveWrongCounts(counts) {
   saveJson(WRONG_COUNTS_KEY, counts);
+}
+
+
+function getGraduatedMap() {
+  const data = loadJson(GRADUATED_ITEMS_KEY, {});
+  return data && typeof data === "object" ? data : {};
+}
+
+function getGraduationKey(item) {
+  const category = item?.category || currentCategory || "word";
+  return `${category}::${String(item?.id || "")}`;
+}
+
+function isGraduated(item) {
+  if (!item) return false;
+  return Boolean(getGraduatedMap()[getGraduationKey(item)]);
+}
+
+function setGraduated(item, graduated) {
+  if (!item) return;
+  const map = getGraduatedMap();
+  const key = getGraduationKey(item);
+
+  if (graduated) {
+    map[key] = {
+      id: String(item.id || ""),
+      category: item.category || currentCategory || "word",
+      graduatedAt: Date.now()
+    };
+  } else {
+    delete map[key];
+  }
+
+  saveJson(GRADUATED_ITEMS_KEY, map);
+}
+
+function getGraduatedItems(category = "word") {
+  return getAllItems().filter(item =>
+    item.category === category && isGraduated(item)
+  );
+}
+
+function getActiveCategoryItems(category) {
+  return getCategoryItems(category).filter(item => !isGraduated(item));
 }
 
 
@@ -695,7 +747,7 @@ function rebuildItemsFromIds(ids, category) {
 
   return (Array.isArray(ids) ? ids : [])
     .map(id => itemMap.get(String(id)))
-    .filter(Boolean);
+    .filter(item => Boolean(item) && !isGraduated(item));
 }
 
 function resumeChapterProgress(progress) {
@@ -735,7 +787,7 @@ function increaseWrongCount(id) {
 
 function getAnnoyingItems(category = currentCategory) {
   return getCategoryItems(category)
-    .filter(item => getWrongCount(item.id) >= ANNOYING_LIMIT)
+    .filter(item => !isGraduated(item) && getWrongCount(item.id) >= ANNOYING_LIMIT)
     .sort((a, b) => getWrongCount(b.id) - getWrongCount(a.id));
 }
 
@@ -930,12 +982,15 @@ function getChapterPlans(category, itemCount) {
 
 function renderChapterScreen() {
   const items = getCategoryItems(currentCategory);
+  const activeItems = items.filter(item => !isGraduated(item));
   const categoryName = CATEGORY_NAMES[currentCategory];
   const chapterSize = getChapterSize(currentCategory);
 
   categoryTitle.textContent = categoryName;
-  categoryTotalCount.textContent = items.length;
+  categoryTotalCount.textContent = activeItems.length;
   annoyingMenuCount.textContent = `${getAnnoyingItems().length}개`;
+  graduatedMenuCount.textContent = `${getGraduatedItems("word").length}개`;
+  openGraduatedButton.hidden = currentCategory !== "word";
 
   chapterList.innerHTML = "";
 
@@ -952,6 +1007,8 @@ function renderChapterScreen() {
   const plans = getChapterPlans(currentCategory, items.length);
 
   plans.forEach(plan => {
+    const remainingInPlan = items.slice(plan.start, plan.end)
+      .filter(item => !isGraduated(item)).length;
     const card = document.createElement("button");
     card.type = "button";
     card.className = "chapter-card";
@@ -960,13 +1017,13 @@ function renderChapterScreen() {
       card.innerHTML = `
         <span class="chapter-name">제 ${plan.chapter}장 · 복습</span>
         <strong>${plan.rangeStart} ~ ${plan.rangeEnd}</strong>
-        <small>앞의 두 장 합쳐서 ${plan.end - plan.start}개 복습<br>시작할 때마다 순서가 랜덤으로 바뀝니다</small>
+        <small>졸업 제외 ${remainingInPlan}개 복습<br>시작할 때마다 순서가 랜덤으로 바뀝니다</small>
       `;
     } else {
       card.innerHTML = `
         <span class="chapter-name">제 ${plan.chapter}장</span>
         <strong>${plan.rangeStart} ~ ${plan.rangeEnd}</strong>
-        <small>새 항목 ${plan.end - plan.start}개 학습<br>${categoryName} 기준 장당 최대 ${chapterSize}개</small>
+        <small>졸업 제외 ${remainingInPlan}개 학습<br>${categoryName} 기준 장당 최대 ${chapterSize}개</small>
       `;
     }
 
@@ -992,7 +1049,16 @@ function renderChapterScreen() {
       card.appendChild(resumeRow);
     }
 
-    card.addEventListener("click", () => startChapter(plan.chapter));
+    if (remainingInPlan === 0) {
+      card.classList.add("chapter-card-empty");
+      card.disabled = true;
+      const emptyNote = document.createElement("small");
+      emptyNote.className = "chapter-empty-note";
+      emptyNote.textContent = "이 장의 모든 항목을 졸업했습니다";
+      card.appendChild(emptyNote);
+    } else {
+      card.addEventListener("click", () => startChapter(plan.chapter));
+    }
     chapterList.appendChild(card);
   });
 }
@@ -1573,7 +1639,7 @@ function rebuildRandomItemsFromIds(ids) {
 
   return (Array.isArray(ids) ? ids : [])
     .map(id => itemMap.get(String(id)))
-    .filter(Boolean);
+    .filter(item => Boolean(item) && !isGraduated(item));
 }
 
 function resumeRandomReview() {
@@ -1613,7 +1679,7 @@ function getRandomReviewPool() {
     if (!unique.has(key)) unique.set(key, item);
   });
 
-  return [...unique.values()];
+  return [...unique.values()].filter(item => !isGraduated(item));
 }
 
 function getRandomReviewHistory() {
@@ -1716,9 +1782,18 @@ function startChapter(chapter, forceRestart = false) {
     clearChapterProgress(currentCategory, chapter);
   }
 
+  const chapterItems = items.slice(plan.start, plan.end)
+    .filter(item => !isGraduated(item));
+
+  if (chapterItems.length === 0) {
+    alert("이 장의 모든 단어를 졸업했습니다.");
+    renderChapterScreen();
+    return;
+  }
+
   studyMode = "chapter";
   selectedChapter = chapter;
-  startStudy(shuffleItems(items.slice(plan.start, plan.end)));
+  startStudy(shuffleItems(chapterItems));
 }
 
 function startAnnoyingStudy() {
@@ -1758,8 +1833,10 @@ function showCurrentItem() {
 
   const categoryName = CATEGORY_NAMES[currentCategory];
 
-  studyTitle.textContent = studyMode === "annoying"
-    ? `${categoryName} 짜증나는 항목 ${roundNumber}회독`
+  studyTitle.textContent = studyMode === "graduated"
+    ? `🎓 졸업 단어 복습 ${roundNumber}회독`
+    : studyMode === "annoying"
+      ? `${categoryName} 짜증나는 항목 ${roundNumber}회독`
     : studyMode === "search"
       ? `${categoryName} 검색 결과`
       : studyMode === "random"
@@ -1797,6 +1874,14 @@ function showCurrentItem() {
   }
 
   editCurrentButton.hidden = !item.shared;
+
+  const canUseGraduation = currentCategory === "word";
+  graduateCurrentButton.hidden = !canUseGraduation;
+  graduateCurrentButton.textContent = studyMode === "graduated" ? "↩️" : "🎓";
+  graduateCurrentButton.setAttribute(
+    "aria-label",
+    studyMode === "graduated" ? "졸업 취소" : "현재 단어 졸업"
+  );
 
   answerElement.hidden = !restoreAnswerVisible;
   restoreAnswerVisible = false;
@@ -1842,8 +1927,10 @@ function finishStudy() {
     clearRandomReviewProgress();
   }
 
-  completeTitle.textContent = studyMode === "annoying"
-    ? `${categoryName} 복습 완료!`
+  completeTitle.textContent = studyMode === "graduated"
+    ? "🎓 졸업 단어 복습 완료!"
+    : studyMode === "annoying"
+      ? `${categoryName} 복습 완료!`
     : studyMode === "search"
       ? `${categoryName} 확인 완료!`
       : studyMode === "random"
@@ -2416,8 +2503,6 @@ testElevenLabsVoiceButton.addEventListener("click", async () => {
   testElevenLabsVoiceButton.textContent = "테스트";
 });
 
-soundButton.addEventListener("click", playSound);
-soundTouchArea.addEventListener("click", playSound);
 
 studyAgainButton.addEventListener("click", () => {
   const item = getCurrentItem();
@@ -2429,6 +2514,114 @@ studyAgainButton.addEventListener("click", () => {
 });
 
 knowButton.addEventListener("click", nextItem);
+
+
+function removeCurrentGraduatedItemFromStudy() {
+  const removedItem = currentItems[currentIndex];
+  if (!removedItem) return;
+
+  currentItems.splice(currentIndex, 1);
+  nextRoundItems = nextRoundItems.filter(item =>
+    String(item.id) !== String(removedItem.id)
+  );
+
+  if (currentIndex >= currentItems.length) {
+    currentIndex = Math.max(0, currentItems.length - 1);
+  }
+
+  if (currentItems.length === 0) {
+    finishStudy();
+    return;
+  }
+
+  showCurrentItem();
+}
+
+function graduateCurrentItem() {
+  const item = getCurrentItem();
+  if (!item || currentCategory !== "word") return;
+
+  if (studyMode === "graduated") {
+    if (!confirm(`「${item.word}」을(를) 일반 단어장으로 복귀시킬까요?`)) return;
+    setGraduated(item, false);
+    removeCurrentGraduatedItemFromStudy();
+    renderGraduatedWords();
+    return;
+  }
+
+  if (!confirm(`「${item.word}」을(를) 졸업 단어로 이동할까요?\n일반 장·복습·랜덤에서 바로 제외됩니다.`)) {
+    return;
+  }
+
+  setGraduated(item, true);
+  const total = getGraduatedItems("word").length;
+  alert(`🎉 졸업 완료!\n현재 졸업 단어 ${total}개`);
+  removeCurrentGraduatedItemFromStudy();
+}
+
+graduateCurrentButton?.addEventListener("click", event => {
+  event.stopPropagation();
+  graduateCurrentItem();
+});
+
+function renderGraduatedWords() {
+  const items = getGraduatedItems("word");
+  graduatedTotalCount.textContent = items.length;
+  graduatedWordList.innerHTML = "";
+  studyGraduatedButton.disabled = items.length === 0;
+
+  if (items.length === 0) {
+    graduatedWordList.innerHTML =
+      '<div class="empty-box">공부 화면의 🎓 버튼을 누르면 여기에 모입니다.</div>';
+    return;
+  }
+
+  items.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "list-item graduated-list-item";
+    row.innerHTML = `
+      <div class="recent-item-content">
+        <strong>${escapeHtml(item.word)}</strong>
+        <span class="recent-item-reading">${escapeHtml(item.reading)}</span>
+        <span class="recent-item-meaning">${escapeHtml(item.meaning)}</span>
+      </div>
+      <button type="button" class="graduate-restore-button">복귀</button>
+    `;
+
+    row.querySelector(".graduate-restore-button").addEventListener("click", () => {
+      setGraduated(item, false);
+      renderGraduatedWords();
+    });
+
+    graduatedWordList.appendChild(row);
+  });
+}
+
+function startGraduatedStudy() {
+  const items = getGraduatedItems("word");
+
+  if (items.length === 0) {
+    alert("졸업 단어가 없습니다.");
+    return;
+  }
+
+  currentCategory = "word";
+  studyMode = "graduated";
+  startStudy(shuffleItems(items));
+}
+
+openGraduatedButton?.addEventListener("click", () => {
+  renderGraduatedWords();
+  showScreen("graduated");
+});
+
+closeGraduatedButton?.addEventListener("click", () => {
+  currentCategory = "word";
+  renderChapterScreen();
+  showScreen("chapter");
+});
+
+studyGraduatedButton?.addEventListener("click", startGraduatedStudy);
 
 function renderAnnoying() {
   const items = getAnnoyingItems();
@@ -2674,6 +2867,12 @@ closeStudyButton.addEventListener("click", () => {
   if (studyMode === "random") {
     renderRandomScreen();
     showScreen("random");
+    return;
+  }
+
+  if (studyMode === "graduated") {
+    renderGraduatedWords();
+    showScreen("graduated");
     return;
   }
 

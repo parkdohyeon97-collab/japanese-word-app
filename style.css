@@ -1932,3 +1932,49 @@ body.study-menu-open {
     bottom: 28px;
   }
 }
+
+
+/* v19.0 졸업 단어 */
+.graduate-button {
+  font-size: 22px !important;
+}
+
+.graduated-menu-card {
+  margin-top: 12px;
+  border-color: rgba(240, 196, 85, 0.35);
+  background: linear-gradient(145deg, rgba(240, 196, 85, 0.08), rgba(255,255,255,0.02));
+}
+
+.graduated-menu-card strong,
+.graduated-menu-card b {
+  color: #f0c455;
+}
+
+.graduated-study-button {
+  width: 100%;
+  margin: 0 0 16px;
+}
+
+.graduated-list-item {
+  gap: 12px;
+}
+
+.graduate-restore-button {
+  flex: 0 0 auto;
+  min-width: 62px;
+  padding: 9px 12px;
+  border: 1px solid rgba(240, 196, 85, 0.42);
+  border-radius: 12px;
+  background: rgba(240, 196, 85, 0.09);
+  color: #f0c455;
+  font-weight: 800;
+}
+
+.chapter-card-empty {
+  opacity: 0.55;
+}
+
+.chapter-empty-note {
+  color: #f0c455 !important;
+  font-weight: 800;
+}
