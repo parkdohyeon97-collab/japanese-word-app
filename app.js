@@ -1,4 +1,4 @@
-// v16.3: smart 50-word random review across word and N5-N3 pools
+// v16.4: resume smart random review and fix study exit buttons
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=163";
+} from "./firebase.js?v=164";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -21,6 +21,7 @@ const ADDED_BY_KEY = "jpAppAddedByV9";
 const MIGRATION_KEY = "jpAppCloudMigrationV9";
 const STUDY_PROGRESS_KEY = "jpAppStudyProgressV15";
 const RANDOM_REVIEW_HISTORY_KEY = "jpAppRandomReviewHistoryV163";
+const RANDOM_REVIEW_PROGRESS_KEY = "jpAppRandomReviewProgressV164";
 
 let sharedItems = [];
 let cloudConnected = false;
@@ -131,6 +132,10 @@ const randomSelectedTitle = document.getElementById("randomSelectedTitle");
 const randomCountHelp = document.getElementById("randomCountHelp");
 const startSmartRandomButton = document.getElementById("startSmartRandomButton");
 const smartRandomStatus = document.getElementById("smartRandomStatus");
+const randomResumePanel = document.getElementById("randomResumePanel");
+const randomResumeText = document.getElementById("randomResumeText");
+const resumeSmartRandomButton = document.getElementById("resumeSmartRandomButton");
+const restartSmartRandomButton = document.getElementById("restartSmartRandomButton");
 const openSharedListButton = document.getElementById("openSharedListButton");
 const closeSharedListButton = document.getElementById("closeSharedListButton");
 const sharedOwnerCards = document.getElementById("sharedOwnerCards");
@@ -756,8 +761,8 @@ function renderHome() {
   grammarCategoryCount.textContent = `${getCategoryItems("grammar").length}개`;
   conversationCategoryCount.textContent = `${getCategoryItems("conversation").length}개`;
   reviewCategoryCount.textContent = `${getCategoryItems("review").length}개`;
-  randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
-  randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
+  if (randomWordCount) randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
+  if (randomReviewCount) randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
   updateSharedOwnerCounts();
   requestAnimationFrame(updateHomeCarouselDots);
 
@@ -1361,6 +1366,7 @@ function renderRandomScreen() {
   const history = getRandomReviewHistory();
   const seenCount = Math.min(history.length, pool.length);
   const remaining = Math.max(0, pool.length - seenCount);
+  const progress = getRandomReviewProgress();
 
   if (smartRandomStatus) {
     smartRandomStatus.textContent = pool.length === 0
@@ -1370,9 +1376,19 @@ function renderRandomScreen() {
         : `전체 ${pool.length}개 · 아직 안 본 단어 ${remaining}개`;
   }
 
-  if (startSmartRandomButton) {
-    startSmartRandomButton.disabled = pool.length === 0;
+  if (progress && Array.isArray(progress.currentItemIds) && progress.currentItemIds.length > 0) {
+    const total = progress.currentItemIds.length;
+    const position = Math.min((Number(progress.currentIndex) || 0) + 1, total);
+
+    randomResumePanel.hidden = false;
+    randomResumeText.textContent = `▶ 이어하기 ${position} / ${total}`;
+    startSmartRandomButton.hidden = true;
+  } else {
+    randomResumePanel.hidden = true;
+    startSmartRandomButton.hidden = false;
   }
+
+  startSmartRandomButton.disabled = pool.length === 0;
 }
 
 function selectRandomCategory(category, selectedButton) {
@@ -1395,6 +1411,66 @@ function selectRandomCategory(category, selectedButton) {
   });
 }
 
+
+
+function getRandomReviewProgress() {
+  const saved = loadJson(RANDOM_REVIEW_PROGRESS_KEY, null);
+  return saved && typeof saved === "object" ? saved : null;
+}
+
+function saveRandomReviewProgress() {
+  if (studyMode !== "random" || currentItems.length === 0) return;
+
+  saveJson(RANDOM_REVIEW_PROGRESS_KEY, {
+    currentIndex,
+    roundNumber,
+    currentItemIds: currentItems.map(item => item.id),
+    nextRoundItemIds: nextRoundItems.map(item => item.id),
+    answerVisible: !answerElement.hidden,
+    savedAt: Date.now()
+  });
+}
+
+function clearRandomReviewProgress() {
+  localStorage.removeItem(RANDOM_REVIEW_PROGRESS_KEY);
+}
+
+function rebuildRandomItemsFromIds(ids) {
+  const itemMap = new Map(
+    getRandomReviewPool().map(item => [String(item.id), item])
+  );
+
+  return (Array.isArray(ids) ? ids : [])
+    .map(id => itemMap.get(String(id)))
+    .filter(Boolean);
+}
+
+function resumeRandomReview() {
+  const progress = getRandomReviewProgress();
+  if (!progress) return false;
+
+  const restoredItems = rebuildRandomItemsFromIds(progress.currentItemIds);
+  if (restoredItems.length === 0) {
+    clearRandomReviewProgress();
+    return false;
+  }
+
+  currentCategory = "word";
+  studyMode = "random";
+  currentItems = restoredItems;
+  nextRoundItems = rebuildRandomItemsFromIds(progress.nextRoundItemIds);
+  currentIndex = Math.min(
+    Math.max(0, Number(progress.currentIndex) || 0),
+    currentItems.length - 1
+  );
+  roundNumber = Math.max(1, Number(progress.roundNumber) || 1);
+  randomRequestedCount = currentItems.length;
+  restoreAnswerVisible = Boolean(progress.answerVisible);
+
+  showScreen("study");
+  showCurrentItem();
+  return true;
+}
 
 function getRandomReviewPool() {
   const wordItems = getCategoryItems("word");
@@ -1469,7 +1545,13 @@ function completeSmartRandomReview(items) {
   }
 }
 
-function startRandomStudy(count = 50) {
+function startRandomStudy(count = 50, forceNew = false) {
+  if (!forceNew && getRandomReviewProgress() && resumeRandomReview()) {
+    return;
+  }
+
+  clearRandomReviewProgress();
+
   const items = getSmartRandomReviewItems(50);
 
   if (items.length === 0) {
@@ -1576,6 +1658,7 @@ function showCurrentItem() {
 
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   saveChapterProgress();
+  saveRandomReviewProgress();
 }
 
 function nextItem() {
@@ -1607,6 +1690,7 @@ function finishStudy() {
 
   if (studyMode === "random") {
     completeSmartRandomReview(currentItems);
+    clearRandomReviewProgress();
   }
 
   completeTitle.textContent = studyMode === "annoying"
@@ -1629,6 +1713,7 @@ meaningButton.addEventListener("click", () => {
   answerElement.hidden = !hidden;
   meaningButton.textContent = hidden ? "뜻 숨기기" : "뜻 보기";
   saveChapterProgress();
+  saveRandomReviewProgress();
 });
 
 
@@ -2207,7 +2292,24 @@ closeRandomButton.addEventListener("click", () => {
 
 if (startSmartRandomButton) {
   startSmartRandomButton.addEventListener("click", () => {
-    startRandomStudy(50);
+    startRandomStudy(50, true);
+  });
+}
+
+if (resumeSmartRandomButton) {
+  resumeSmartRandomButton.addEventListener("click", () => {
+    if (!resumeRandomReview()) {
+      renderRandomScreen();
+      alert("이어갈 랜덤복습 기록이 없습니다.");
+    }
+  });
+}
+
+if (restartSmartRandomButton) {
+  restartSmartRandomButton.addEventListener("click", () => {
+    if (!confirm("현재 랜덤복습 진행을 지우고 새로운 50개로 시작할까요?")) return;
+    clearRandomReviewProgress();
+    startRandomStudy(50, true);
   });
 }
 
@@ -2248,9 +2350,13 @@ closeAnnoyingButton.addEventListener("click", () => {
 studyAnnoyingButton.addEventListener("click", startAnnoyingStudy);
 
 function returnHome() {
+  saveChapterProgress();
+  saveRandomReviewProgress();
+
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  renderHome();
+
   showScreen("home");
+  renderHome();
 }
 
 exitStudyButton.addEventListener("click", returnHome);
@@ -2664,15 +2770,34 @@ async function startCloudSync() {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && !screens.study.hidden) {
     saveChapterProgress();
+    saveRandomReviewProgress();
   }
 });
 
 window.addEventListener("pagehide", () => {
   if (!screens.study.hidden) {
     saveChapterProgress();
+    saveRandomReviewProgress();
   }
 });
 
 renderHome();
 showScreen("home");
 startCloudSync();
+
+
+document.addEventListener('DOMContentLoaded',()=>{
+const sh=document.getElementById('studyMenuSheet');
+const exit=document.getElementById('exitStudyButton');
+if(exit&&sh){exit.onclick=(e)=>{e.preventDefault();sh.hidden=false;};}
+const c=document.getElementById('menuClose'); if(c)c.onclick=()=>sh.hidden=true;
+const map=[
+['menuResume',()=>sh.hidden=true],
+['menuRestart',()=>{sh.hidden=true; if(confirm('처음부터 다시 시작할까요?')) location.reload();}],
+['menuWrong',()=>alert('v16.5에서 연결 예정')],
+['menuRandom',()=>{sh.hidden=true; document.getElementById('closeStudyButton')?.click(); setTimeout(()=>document.getElementById('openRandomButton')?.click(),200);}],
+['menuEdit',()=>{sh.hidden=true; document.getElementById('editCurrentButton')?.click();}],
+['menuSettings',()=>{sh.hidden=true; document.getElementById('ttsSettingsButton')?.click();}]
+];
+map.forEach(([id,f])=>{const b=document.getElementById(id); if(b)b.onclick=f;});
+});

@@ -1633,3 +1633,34 @@ body.dialog-open {
 .smart-random-card .primary-button {
   margin-top: 8px;
 }
+
+
+/* v16.4 랜덤복습 이어하기 */
+.random-resume-panel {
+  display: grid;
+  gap: 13px;
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid rgba(240, 207, 99, 0.28);
+  border-radius: 18px;
+  background: rgba(240, 207, 99, 0.07);
+}
+
+.random-resume-panel > strong {
+  color: #f0cf63;
+  font-size: 17px;
+}
+
+.random-resume-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.random-resume-actions button {
+  margin: 0;
+}
+
+.study-menu-sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:9999}
+.study-menu-sheet[hidden]{display:none}
+.study-menu-sheet .sheet{background:#222;width:100%;padding:20px;border-radius:22px 22px 0 0;display:grid;gap:10px}
+.study-menu-sheet .sheet button{padding:16px;border-radius:12px;border:none;font-size:18px}
