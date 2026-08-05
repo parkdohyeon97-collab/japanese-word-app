@@ -1,4 +1,4 @@
-// v16.8: close study to the current chapter selection screen
+// v18.0: Korean-first conversation output training and smart bulk import
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,12 +6,12 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=172";
+} from "./firebase.js?v=180";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
   grammar: 20,
-  conversation: 100,
+  conversation: 20,
   review: 100
 };
 const ANNOYING_LIMIT = 8;
@@ -161,6 +161,11 @@ const bulkPanel = document.getElementById("bulkPanel");
 const wordInput = document.getElementById("wordInput");
 const readingInput = document.getElementById("readingInput");
 const meaningInput = document.getElementById("meaningInput");
+const wordInputLabel = document.getElementById("wordInputLabel");
+const readingInputLabel = document.getElementById("readingInputLabel");
+const meaningInputLabel = document.getElementById("meaningInputLabel");
+const bulkHelpText = document.getElementById("bulkHelpText");
+const bulkExample = document.getElementById("bulkExample");
 const bulkInput = document.getElementById("bulkInput");
 const saveBulkButton = document.getElementById("saveBulkButton");
 const previewBulkButton = document.getElementById("previewBulkButton");
@@ -294,27 +299,46 @@ function containsKorean(value) {
   return /[\uac00-\ud7a3\u3131-\u318e]/.test(String(value || ""));
 }
 
+function isKanaOnlyText(value) {
+  const text = String(value || "")
+    .replace(/[\s、。！？!?・ー〜～「」『』（）()…,.]/g, "");
+  return Boolean(text) &&
+    /[\u3040-\u30ff]/.test(text) &&
+    !/[\u3400-\u9fff々〆ヵヶ]/.test(text) &&
+    !containsKorean(text);
+}
+
 function mapThreeParts(parts) {
-  const cleaned = parts.map(part => stripOuterSeparators(stripListNumber(part)));
-  const readingIndex = cleaned.findIndex(containsKana);
+  const cleaned = parts
+    .map(part => stripOuterSeparators(stripListNumber(part)))
+    .map(part => String(part || "").replace(/^(?:한국어|한글|뜻|일본어|한자|히라가나|읽는\s*법)\s*[:：]\s*/i, "").trim())
+    .filter(Boolean);
+
   const koreanIndex = cleaned.findIndex(containsKorean);
+  const readingIndex = cleaned.findIndex((part, index) =>
+    index !== koreanIndex && isKanaOnlyText(part)
+  );
   const japaneseIndex = cleaned.findIndex((part, index) =>
-    index !== readingIndex && containsJapanese(part) && !containsKorean(part)
+    index !== koreanIndex &&
+    index !== readingIndex &&
+    containsJapanese(part) &&
+    !containsKorean(part)
   );
 
   if (readingIndex >= 0 && koreanIndex >= 0 && japaneseIndex >= 0) {
     return {
       word: cleaned[japaneseIndex],
       reading: cleaned[readingIndex],
-      meaning: cleaned[koreanIndex]
+      meaning: cleaned[koreanIndex],
+      autoReordered: !(japaneseIndex === 0 && readingIndex === 1 && koreanIndex === 2)
     };
   }
 
-  // 기본 입력 순서: 일본어 / 히라가나 / 한국어 뜻
   return {
-    word: cleaned[0],
-    reading: cleaned[1],
-    meaning: cleaned.slice(2).join(" ")
+    word: cleaned[0] || "",
+    reading: cleaned[1] || "",
+    meaning: cleaned.slice(2).join(" "),
+    autoReordered: false
   };
 }
 
@@ -1020,6 +1044,52 @@ async function deleteItem(id) {
   }
 }
 
+function configureAddScreenForCategory() {
+  const isConversation = currentCategory === "conversation";
+  screens.add.classList.toggle("conversation-add", isConversation);
+
+  if (isConversation) {
+    wordInputLabel.textContent = "일본어 문장";
+    readingInputLabel.textContent = "히라가나";
+    meaningInputLabel.textContent = "한국어 문장";
+
+    wordInput.placeholder = "例) 今日、何したの？";
+    readingInput.placeholder = "例) きょう、なにしたの？";
+    meaningInput.placeholder = "예) 오늘 뭐 했어?";
+
+    bulkHelpText.textContent =
+      "한글·일본어·히라가나 순서가 뒤섞여도 문자 종류를 보고 자동 정리합니다. 번호, -, /, |, 여러 칸 띄어쓰기도 정리합니다.";
+    bulkExample.textContent =
+`今日、何したの？
+きょう、なにしたの？
+오늘 뭐 했어?
+
+지금 어디야? / 今どこ？ / いまどこ？
+
+1. なんじにあおうか？
+何時に会おうか？
+몇 시에 만날까?`;
+  } else {
+    wordInputLabel.textContent = "일본어";
+    readingInputLabel.textContent = "읽는 법";
+    meaningInputLabel.textContent = "한국어 뜻";
+
+    wordInput.placeholder = "例) 食堂";
+    readingInput.placeholder = "例) しょくどう";
+    meaningInput.placeholder = "例) 식당";
+
+    bulkHelpText.textContent = "3줄·하이픈·파이프 형식을 모두 자동 인식합니다.";
+    bulkExample.textContent =
+`勝ち目
+かちめ
+승산
+
+分解 - ぶんかい - 분해
+
+競争|きょうそう|경쟁`;
+  }
+}
+
 singleForm.addEventListener("submit", async event => {
   event.preventDefault();
 
@@ -1151,37 +1221,37 @@ function renderBulkPreview(result) {
         <span>저장 전 수정 가능</span>
       </div>
 
+      ${currentCategory === "conversation" ? `
+      <label>
+        한국어 문장
+        <input class="bulk-edit-input" data-field="meaning" value="${escapeHtml(item.meaning)}" autocomplete="off">
+      </label>
+      <label>
+        일본어 문장
+        <input class="bulk-edit-input" data-field="word" value="${escapeHtml(item.word)}" autocomplete="off">
+      </label>
+      <label>
+        히라가나
+        <input class="bulk-edit-input" data-field="reading" value="${escapeHtml(item.reading)}" autocomplete="off">
+      </label>
+      ` : `
       <label>
         일본어 한자·표현
-        <input
-          class="bulk-edit-input"
-          data-field="word"
-          value="${escapeHtml(item.word)}"
-          autocomplete="off"
-        >
+        <input class="bulk-edit-input" data-field="word" value="${escapeHtml(item.word)}" autocomplete="off">
       </label>
-
       <label>
         읽는 법
-        <input
-          class="bulk-edit-input"
-          data-field="reading"
-          value="${escapeHtml(item.reading)}"
-          autocomplete="off"
-        >
+        <input class="bulk-edit-input" data-field="reading" value="${escapeHtml(item.reading)}" autocomplete="off">
       </label>
-
       <label>
         한국어 뜻
-        <input
-          class="bulk-edit-input"
-          data-field="meaning"
-          value="${escapeHtml(item.meaning)}"
-          autocomplete="off"
-        >
+        <input class="bulk-edit-input" data-field="meaning" value="${escapeHtml(item.meaning)}" autocomplete="off">
       </label>
+      `}
     </article>
   `).join("");
+
+  const reorderedCount = lastBulkPreview.items.filter(item => item.autoReordered).length;
 
   const errorHtml = lastBulkPreview.errors.length ? `
     <details class="bulk-error-details">
@@ -1199,7 +1269,7 @@ function renderBulkPreview(result) {
   bulkPreview.innerHTML = `
     <div class="bulk-preview-summary">
       <strong>인식 성공 ${lastBulkPreview.items.length}개</strong>
-      <span>형식 오류 ${lastBulkPreview.errors.length}개</span>
+      <span>순서 자동 수정 ${reorderedCount}개 · 형식 오류 ${lastBulkPreview.errors.length}개</span>
     </div>
 
     <p class="help">오타가 있으면 아래 칸에서 바로 고친 뒤 저장하세요.</p>
@@ -1288,7 +1358,6 @@ saveBulkButton.addEventListener("click", async () => {
 
   lastBulkPreview.items.forEach(item => {
     const cleanedItem = {
-      ...item,
       word: String(item.word || "").trim(),
       reading: String(item.reading || "").trim(),
       meaning: String(item.meaning || "").trim()
@@ -1649,13 +1718,31 @@ function showCurrentItem() {
   currentNumber.textContent = currentIndex + 1;
   totalNumber.textContent = currentItems.length;
 
-  wordElement.textContent = item.word;
-  readingElement.textContent = item.reading;
-  meaningElement.textContent = item.meaning;
+  const isConversation = currentCategory === "conversation";
+
+  if (isConversation) {
+    wordElement.textContent = item.meaning;
+    readingElement.textContent = item.word;
+    meaningElement.textContent = item.reading;
+    wordElement.classList.add("conversation-prompt");
+    readingElement.classList.add("conversation-japanese");
+    meaningElement.classList.add("conversation-reading");
+    meaningButton.textContent = restoreAnswerVisible ? "일본어 확인" : "일본어 보기";
+    knowButton.textContent = "✓ 말할 수 있음";
+  } else {
+    wordElement.textContent = item.word;
+    readingElement.textContent = item.reading;
+    meaningElement.textContent = item.meaning;
+    wordElement.classList.remove("conversation-prompt");
+    readingElement.classList.remove("conversation-japanese");
+    meaningElement.classList.remove("conversation-reading");
+    meaningButton.textContent = restoreAnswerVisible ? "뜻 확인" : "뜻 보기";
+    knowButton.textContent = "✓ 알고 있음";
+  }
+
   editCurrentButton.hidden = !item.shared;
 
   answerElement.hidden = !restoreAnswerVisible;
-  meaningButton.textContent = restoreAnswerVisible ? "뜻 확인" : "뜻 보기";
   restoreAnswerVisible = false;
 
   const count = getWrongCount(item.id);
@@ -1717,7 +1804,9 @@ function finishStudy() {
 meaningButton.addEventListener("click", () => {
   if (answerElement.hidden) {
     answerElement.hidden = false;
-    meaningButton.textContent = "뜻 확인";
+    meaningButton.textContent = currentCategory === "conversation"
+      ? "일본어 확인"
+      : "뜻 확인";
     saveChapterProgress();
     saveRandomReviewProgress();
   }
@@ -2485,6 +2574,7 @@ closeChapterButton.addEventListener("click", () => {
 
 openAddButton.addEventListener("click", () => {
   addTitle.textContent = `${CATEGORY_NAMES[currentCategory]} 추가`;
+  configureAddScreenForCategory();
   renderRecentItems();
   showScreen("add");
 });
