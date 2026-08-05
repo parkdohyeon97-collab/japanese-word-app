@@ -1325,3 +1325,56 @@ body.dialog-open {
 .recent-item-meaning::after {
   content: none !important;
 }
+
+
+/* v15.0 이어서 공부하기 */
+.category-book {
+  position: relative;
+}
+
+.book-resume-status {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(15, 17, 19, 0.42);
+  color: #f0cf63;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.chapter-card {
+  position: relative;
+}
+
+.chapter-resume-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.chapter-resume-row > b {
+  color: #f0cf63;
+  font-size: 14px;
+}
+
+.chapter-restart-button {
+  width: auto !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 7px 11px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: var(--text) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}

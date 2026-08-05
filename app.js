@@ -1,4 +1,4 @@
-// v14.6: normalize raw Firebase items before every list render and force cache refresh
+// v15.0: save and resume the exact study position for every chapter
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=146";
+} from "./firebase.js?v=150";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -19,6 +19,7 @@ const USER_ITEMS_KEY = "jpAppItemsV5";
 const WRONG_COUNTS_KEY = "jpAppWrongCountsV5";
 const ADDED_BY_KEY = "jpAppAddedByV9";
 const MIGRATION_KEY = "jpAppCloudMigrationV9";
+const STUDY_PROGRESS_KEY = "jpAppStudyProgressV15";
 
 let sharedItems = [];
 let cloudConnected = false;
@@ -105,6 +106,12 @@ const grammarCategoryCount = document.getElementById("grammarCategoryCount");
 const conversationCategoryCount = document.getElementById("conversationCategoryCount");
 const reviewCategoryCount = document.getElementById("reviewCategoryCount");
 const annoyingMenuCount = document.getElementById("annoyingMenuCount");
+const resumeStatusElements = {
+  word: document.getElementById("wordResumeStatus"),
+  grammar: document.getElementById("grammarResumeStatus"),
+  conversation: document.getElementById("conversationResumeStatus"),
+  review: document.getElementById("reviewResumeStatus")
+};
 const openSearchButton = document.getElementById("openSearchButton");
 const closeSearchButton = document.getElementById("closeSearchButton");
 const searchInput = document.getElementById("searchInput");
@@ -212,6 +219,7 @@ let currentItems = [];
 let nextRoundItems = [];
 let randomCategory = "word";
 let randomRequestedCount = 50;
+let restoreAnswerVisible = false;
 
 function loadJson(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -602,6 +610,78 @@ function showSharedOwnerSelection() {
   updateSharedOwnerCounts();
 }
 
+
+function getAllStudyProgress() {
+  const saved = loadJson(STUDY_PROGRESS_KEY, {});
+  return saved && typeof saved === "object" ? saved : {};
+}
+
+function getStudyProgressKey(category = currentCategory, chapter = selectedChapter) {
+  return `${category}::${chapter}`;
+}
+
+function getChapterProgress(category, chapter) {
+  return getAllStudyProgress()[getStudyProgressKey(category, chapter)] || null;
+}
+
+function saveChapterProgress() {
+  if (studyMode !== "chapter" || currentItems.length === 0) return;
+
+  const allProgress = getAllStudyProgress();
+  allProgress[getStudyProgressKey()] = {
+    category: currentCategory,
+    chapter: selectedChapter,
+    currentIndex,
+    roundNumber,
+    currentItemIds: currentItems.map(item => item.id),
+    nextRoundItemIds: nextRoundItems.map(item => item.id),
+    answerVisible: !answerElement.hidden,
+    savedAt: Date.now()
+  };
+  saveJson(STUDY_PROGRESS_KEY, allProgress);
+}
+
+function clearChapterProgress(category = currentCategory, chapter = selectedChapter) {
+  const allProgress = getAllStudyProgress();
+  delete allProgress[getStudyProgressKey(category, chapter)];
+  saveJson(STUDY_PROGRESS_KEY, allProgress);
+}
+
+function rebuildItemsFromIds(ids, category) {
+  const itemMap = new Map(
+    getCategoryItems(category).map(item => [String(item.id), item])
+  );
+
+  return (Array.isArray(ids) ? ids : [])
+    .map(id => itemMap.get(String(id)))
+    .filter(Boolean);
+}
+
+function resumeChapterProgress(progress) {
+  const restoredItems = rebuildItemsFromIds(progress.currentItemIds, progress.category);
+
+  if (restoredItems.length === 0) {
+    clearChapterProgress(progress.category, progress.chapter);
+    return false;
+  }
+
+  currentCategory = progress.category;
+  selectedChapter = Number(progress.chapter);
+  studyMode = "chapter";
+  currentItems = restoredItems;
+  nextRoundItems = rebuildItemsFromIds(progress.nextRoundItemIds, progress.category);
+  currentIndex = Math.min(
+    Math.max(0, Number(progress.currentIndex) || 0),
+    currentItems.length - 1
+  );
+  roundNumber = Math.max(1, Number(progress.roundNumber) || 1);
+  restoreAnswerVisible = Boolean(progress.answerVisible);
+
+  showScreen("study");
+  showCurrentItem();
+  return true;
+}
+
 function getWrongCount(id) {
   return Number(getWrongCounts()[id] || 0);
 }
@@ -632,6 +712,28 @@ function renderHome() {
   randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
   randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
   updateSharedOwnerCounts();
+
+  Object.entries(resumeStatusElements).forEach(([category, element]) => {
+    if (!element) return;
+
+    const progresses = Object.values(getAllStudyProgress())
+      .filter(progress => progress.category === category)
+      .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0));
+
+    const latest = progresses[0];
+
+    if (!latest) {
+      element.hidden = true;
+      element.textContent = "";
+      return;
+    }
+
+    const total = Array.isArray(latest.currentItemIds) ? latest.currentItemIds.length : 0;
+    const position = Math.min((Number(latest.currentIndex) || 0) + 1, total);
+
+    element.textContent = `▶ 제 ${latest.chapter}장 ${position} / ${total}`;
+    element.hidden = false;
+  });
 }
 
 
@@ -727,6 +829,28 @@ function renderChapterScreen() {
         <strong>${plan.rangeStart} ~ ${plan.rangeEnd}</strong>
         <small>새 항목 ${plan.end - plan.start}개 학습<br>${categoryName} 기준 장당 최대 ${chapterSize}개</small>
       `;
+    }
+
+    const progress = getChapterProgress(currentCategory, plan.chapter);
+
+    if (progress) {
+      const total = Array.isArray(progress.currentItemIds) ? progress.currentItemIds.length : 0;
+      const position = Math.min((Number(progress.currentIndex) || 0) + 1, total);
+
+      const resumeRow = document.createElement("span");
+      resumeRow.className = "chapter-resume-row";
+      resumeRow.innerHTML = `
+        <b>▶ 이어하기 ${position} / ${total}</b>
+        <button type="button" class="chapter-restart-button">처음부터</button>
+      `;
+
+      resumeRow.querySelector(".chapter-restart-button").addEventListener("click", event => {
+        event.stopPropagation();
+        clearChapterProgress(currentCategory, plan.chapter);
+        startChapter(plan.chapter, true);
+      });
+
+      card.appendChild(resumeRow);
     }
 
     card.addEventListener("click", () => startChapter(plan.chapter));
@@ -1227,7 +1351,7 @@ function startRandomStudy(count) {
   startStudy(shuffleItems(items).slice(0, count));
 }
 
-function startChapter(chapter) {
+function startChapter(chapter, forceRestart = false) {
   const items = getCategoryItems(currentCategory);
   const plan = getChapterPlans(currentCategory, items.length)
     .find(candidate => candidate.chapter === chapter);
@@ -1237,10 +1361,18 @@ function startChapter(chapter) {
     return;
   }
 
+  const savedProgress = getChapterProgress(currentCategory, chapter);
+
+  if (!forceRestart && savedProgress && resumeChapterProgress(savedProgress)) {
+    return;
+  }
+
+  if (forceRestart) {
+    clearChapterProgress(currentCategory, chapter);
+  }
+
   studyMode = "chapter";
   selectedChapter = chapter;
-
-  // 같은 장을 다시 열어도 항상 새로운 순서로 시작합니다.
   startStudy(shuffleItems(items.slice(plan.start, plan.end)));
 }
 
@@ -1261,6 +1393,7 @@ function startStudy(items) {
   nextRoundItems = [];
   currentIndex = 0;
   roundNumber = 1;
+  restoreAnswerVisible = false;
 
   showScreen("study");
   showCurrentItem();
@@ -1301,14 +1434,16 @@ function showCurrentItem() {
   meaningElement.textContent = item.meaning;
   editCurrentButton.hidden = !item.shared;
 
-  answerElement.hidden = true;
-  meaningButton.textContent = "뜻 보기";
+  answerElement.hidden = !restoreAnswerVisible;
+  meaningButton.textContent = restoreAnswerVisible ? "뜻 숨기기" : "뜻 보기";
+  restoreAnswerVisible = false;
 
   const count = getWrongCount(item.id);
   wrongCountBadge.textContent = `공부하겠음 ${count}회`;
   wrongCountBadge.classList.toggle("angry", count >= ANNOYING_LIMIT);
 
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  saveChapterProgress();
 }
 
 function nextItem() {
@@ -1334,6 +1469,10 @@ function nextItem() {
 function finishStudy() {
   const categoryName = CATEGORY_NAMES[currentCategory];
 
+  if (studyMode === "chapter") {
+    clearChapterProgress();
+  }
+
   completeTitle.textContent = studyMode === "annoying"
     ? `${categoryName} 복습 완료!`
     : studyMode === "search"
@@ -1353,6 +1492,7 @@ meaningButton.addEventListener("click", () => {
   const hidden = answerElement.hidden;
   answerElement.hidden = !hidden;
   meaningButton.textContent = hidden ? "뜻 숨기기" : "뜻 보기";
+  saveChapterProgress();
 });
 
 
@@ -2349,6 +2489,18 @@ async function startCloudSync() {
     alert("Firebase에 로그인하지 못했습니다. 인터넷 연결과 Firebase 설정을 확인해 주세요.");
   }
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && !screens.study.hidden) {
+    saveChapterProgress();
+  }
+});
+
+window.addEventListener("pagehide", () => {
+  if (!screens.study.hidden) {
+    saveChapterProgress();
+  }
+});
 
 renderHome();
 showScreen("home");
