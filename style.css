@@ -1660,7 +1660,134 @@ body.dialog-open {
   margin: 0;
 }
 
-.study-menu-sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:9999}
-.study-menu-sheet[hidden]{display:none}
-.study-menu-sheet .sheet{background:#222;width:100%;padding:20px;border-radius:22px 22px 0 0;display:grid;gap:10px}
-.study-menu-sheet .sheet button{padding:16px;border-radius:12px;border:none;font-size:18px}
+/* v16.6 왼쪽 학습 메뉴 */
+.study-menu-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.study-menu-sheet[hidden] {
+  display: none;
+}
+
+.study-menu-sheet.open {
+  pointer-events: auto;
+}
+
+.study-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background 240ms ease;
+}
+
+.study-menu-sheet.open .study-menu-backdrop {
+  background: rgba(0, 0, 0, 0.52);
+}
+
+.study-menu-drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(72vw, 310px);
+  padding:
+    max(20px, env(safe-area-inset-top))
+    15px
+    max(20px, env(safe-area-inset-bottom));
+  border-right: 1px solid rgba(110, 185, 204, 0.2);
+  background:
+    linear-gradient(180deg, rgba(28, 34, 38, 0.98), rgba(16, 19, 22, 0.99));
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.42);
+  transform: translateX(-105%);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.study-menu-sheet.open .study-menu-drawer {
+  transform: translateX(0);
+}
+
+.study-menu-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 2px 5px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.study-menu-drawer-header strong {
+  color: var(--text);
+  font-size: 20px;
+}
+
+.study-menu-close {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 27px;
+  line-height: 1;
+}
+
+.study-menu-list {
+  display: grid;
+  margin-top: 8px;
+}
+
+.study-menu-list button {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 62px;
+  margin: 0;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.study-menu-list button:active {
+  background: rgba(110, 185, 204, 0.12);
+}
+
+.study-menu-list button span {
+  font-size: 21px;
+  text-align: center;
+}
+
+.study-menu-list button b {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+body.study-menu-open {
+  overflow: hidden;
+}
+
+@media (min-width: 800px) {
+  .study-menu-drawer {
+    width: 320px;
+  }
+}

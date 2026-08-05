@@ -1,4 +1,4 @@
-// v16.4: resume smart random review and fix study exit buttons
+// v16.6: left drawer study menu and one-way meaning reveal
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=164";
+} from "./firebase.js?v=166";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -1649,7 +1649,7 @@ function showCurrentItem() {
   editCurrentButton.hidden = !item.shared;
 
   answerElement.hidden = !restoreAnswerVisible;
-  meaningButton.textContent = restoreAnswerVisible ? "뜻 숨기기" : "뜻 보기";
+  meaningButton.textContent = restoreAnswerVisible ? "뜻 확인" : "뜻 보기";
   restoreAnswerVisible = false;
 
   const count = getWrongCount(item.id);
@@ -1709,11 +1709,12 @@ function finishStudy() {
 }
 
 meaningButton.addEventListener("click", () => {
-  const hidden = answerElement.hidden;
-  answerElement.hidden = !hidden;
-  meaningButton.textContent = hidden ? "뜻 숨기기" : "뜻 보기";
-  saveChapterProgress();
-  saveRandomReviewProgress();
+  if (answerElement.hidden) {
+    answerElement.hidden = false;
+    meaningButton.textContent = "뜻 확인";
+    saveChapterProgress();
+    saveRandomReviewProgress();
+  }
 });
 
 
@@ -2786,18 +2787,112 @@ showScreen("home");
 startCloudSync();
 
 
-document.addEventListener('DOMContentLoaded',()=>{
-const sh=document.getElementById('studyMenuSheet');
-const exit=document.getElementById('exitStudyButton');
-if(exit&&sh){exit.onclick=(e)=>{e.preventDefault();sh.hidden=false;};}
-const c=document.getElementById('menuClose'); if(c)c.onclick=()=>sh.hidden=true;
-const map=[
-['menuResume',()=>sh.hidden=true],
-['menuRestart',()=>{sh.hidden=true; if(confirm('처음부터 다시 시작할까요?')) location.reload();}],
-['menuWrong',()=>alert('v16.5에서 연결 예정')],
-['menuRandom',()=>{sh.hidden=true; document.getElementById('closeStudyButton')?.click(); setTimeout(()=>document.getElementById('openRandomButton')?.click(),200);}],
-['menuEdit',()=>{sh.hidden=true; document.getElementById('editCurrentButton')?.click();}],
-['menuSettings',()=>{sh.hidden=true; document.getElementById('ttsSettingsButton')?.click();}]
-];
-map.forEach(([id,f])=>{const b=document.getElementById(id); if(b)b.onclick=f;});
+document.addEventListener("DOMContentLoaded", () => {
+  const sheet = document.getElementById("studyMenuSheet");
+  const drawer = sheet?.querySelector(".study-menu-drawer");
+  const menuButton = document.getElementById("exitStudyButton");
+  const closeButton = document.getElementById("menuClose");
+  const backdrop = document.getElementById("studyMenuBackdrop");
+
+  function openStudyMenu() {
+    if (!sheet) return;
+    sheet.hidden = false;
+    document.body.classList.add("study-menu-open");
+    requestAnimationFrame(() => {
+      sheet.classList.add("open");
+      drawer?.focus?.();
+    });
+  }
+
+  function closeStudyMenu() {
+    if (!sheet) return;
+    sheet.classList.remove("open");
+    document.body.classList.remove("study-menu-open");
+    window.setTimeout(() => {
+      if (!sheet.classList.contains("open")) sheet.hidden = true;
+    }, 260);
+  }
+
+  menuButton?.addEventListener("click", event => {
+    event.preventDefault();
+    openStudyMenu();
+  });
+
+  closeButton?.addEventListener("click", closeStudyMenu);
+  backdrop?.addEventListener("click", closeStudyMenu);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && sheet && !sheet.hidden) closeStudyMenu();
+  });
+
+  document.getElementById("menuResume")?.addEventListener("click", closeStudyMenu);
+
+  document.getElementById("menuRestart")?.addEventListener("click", () => {
+    if (!confirm("현재 학습을 처음부터 다시 시작할까요?")) return;
+
+    closeStudyMenu();
+
+    if (studyMode === "chapter") {
+      clearChapterProgress(currentCategory, selectedChapter);
+      startChapter(selectedChapter, true);
+      return;
+    }
+
+    if (studyMode === "random") {
+      clearRandomReviewProgress();
+      startRandomStudy(50, true);
+      return;
+    }
+
+    nextRoundItems = [];
+    currentIndex = 0;
+    roundNumber = 1;
+    restoreAnswerVisible = false;
+    showCurrentItem();
+  });
+
+  document.getElementById("menuWrong")?.addEventListener("click", () => {
+    const unique = new Map();
+
+    [...currentItems, ...nextRoundItems].forEach(item => {
+      if (getWrongCount(item.id) > 0 && !unique.has(String(item.id))) {
+        unique.set(String(item.id), item);
+      }
+    });
+
+    const wrongItems = [...unique.values()];
+
+    if (wrongItems.length === 0) {
+      alert("현재 학습 범위에는 공부하겠음으로 표시한 단어가 없습니다.");
+      return;
+    }
+
+    closeStudyMenu();
+    studyMode = "annoying";
+    startStudy(shuffleItems(wrongItems));
+  });
+
+  document.getElementById("menuRandom")?.addEventListener("click", () => {
+    saveChapterProgress();
+    saveRandomReviewProgress();
+    closeStudyMenu();
+    renderRandomScreen();
+    showScreen("random");
+  });
+
+  document.getElementById("menuEdit")?.addEventListener("click", () => {
+    closeStudyMenu();
+
+    if (editCurrentButton.hidden) {
+      alert("직접 추가한 단어만 수정할 수 있습니다.");
+      return;
+    }
+
+    editCurrentButton.click();
+  });
+
+  document.getElementById("menuSettings")?.addEventListener("click", () => {
+    closeStudyMenu();
+    ttsSettingsButton.click();
+  });
 });

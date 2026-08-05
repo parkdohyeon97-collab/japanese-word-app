@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f1113">
   <title>일본어 학습 앱</title>
-  <link rel="stylesheet" href="style.css?v=164">
+  <link rel="stylesheet" href="style.css?v=166">
 </head>
 <body>
   <main id="app">
@@ -415,17 +415,26 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=164"></script>
+  <script type="module" src="app.js?v=166"></script>
 
 <div id="studyMenuSheet" class="study-menu-sheet" hidden>
-<div class="sheet">
-<button id="menuResume">📖 이어하기</button>
-<button id="menuRestart">🔄 처음부터 다시</button>
-<button id="menuWrong">⭐ 공부하겠음만 복습</button>
-<button id="menuRandom">🎲 랜덤복습</button>
-<button id="menuEdit">📝 현재 단어 수정</button>
-<button id="menuSettings">⚙️ 설정</button>
-<button id="menuClose">닫기</button>
-</div></div>
+  <button id="studyMenuBackdrop" class="study-menu-backdrop" type="button" aria-label="학습 메뉴 닫기"></button>
+
+  <aside class="study-menu-drawer" role="dialog" aria-modal="true" aria-label="학습 메뉴">
+    <header class="study-menu-drawer-header">
+      <strong>학습 메뉴</strong>
+      <button id="menuClose" class="study-menu-close" type="button" aria-label="메뉴 닫기">×</button>
+    </header>
+
+    <nav class="study-menu-list">
+      <button id="menuResume" type="button"><span>📖</span><b>이어하기</b></button>
+      <button id="menuRestart" type="button"><span>🔄</span><b>처음부터 다시</b></button>
+      <button id="menuWrong" type="button"><span>⭐</span><b>공부하겠음만 복습</b></button>
+      <button id="menuRandom" type="button"><span>🎲</span><b>랜덤복습</b></button>
+      <button id="menuEdit" type="button"><span>📝</span><b>현재 단어 수정</b></button>
+      <button id="menuSettings" type="button"><span>⚙️</span><b>설정</b></button>
+    </nav>
+  </aside>
+</div>
 </body>
 </html>
