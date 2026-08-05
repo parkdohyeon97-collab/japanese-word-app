@@ -1,4 +1,4 @@
-// v18.0: Korean-first conversation output training and smart bulk import
+// v18.1: add a global smooth scroll-to-top button for every tab and screen
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=180";
+} from "./firebase.js?v=181";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -150,6 +150,7 @@ const clearSharedListSearchButton = document.getElementById("clearSharedListSear
 const sharedListSummary = document.getElementById("sharedListSummary");
 const sharedWordList = document.getElementById("sharedWordList");
 
+const scrollToTopButton = document.getElementById("scrollToTopButton");
 const closeChapterButton = document.getElementById("closeChapterButton");
 const openAddButton = document.getElementById("openAddButton");
 const closeAddButton = document.getElementById("closeAddButton");
@@ -784,6 +785,7 @@ function showScreen(name) {
   Object.values(screens).forEach(screen => screen.hidden = true);
   screens[name].hidden = false;
   window.scrollTo(0, 0);
+  window.setTimeout(updateScrollToTopButton, 0);
 }
 
 function renderHome() {
@@ -818,6 +820,60 @@ function renderHome() {
     element.hidden = false;
   });
 }
+
+
+
+function getCurrentPageScrollTop() {
+  const windowTop =
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0;
+
+  const visibleScreen = [...document.querySelectorAll(".screen, .study-screen")]
+    .find(screen => !screen.hidden);
+
+  const screenTop = visibleScreen ? Number(visibleScreen.scrollTop || 0) : 0;
+  return Math.max(windowTop, screenTop);
+}
+
+function updateScrollToTopButton() {
+  if (!scrollToTopButton) return;
+
+  const shouldShow = getCurrentPageScrollTop() > 320;
+  scrollToTopButton.hidden = !shouldShow;
+  scrollToTopButton.classList.toggle("visible", shouldShow);
+}
+
+function scrollEveryActiveViewToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const scrollingElement = document.scrollingElement;
+  if (scrollingElement) {
+    scrollingElement.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  document.querySelectorAll(
+    ".screen, .study-screen, .list, .chapter-list, .bulk-preview-list, .unresolved-list"
+  ).forEach(element => {
+    if (element.scrollTop > 0) {
+      element.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+
+  window.setTimeout(updateScrollToTopButton, 450);
+}
+
+scrollToTopButton?.addEventListener("click", scrollEveryActiveViewToTop);
+
+// window 스크롤과 내부 화면 스크롤을 모두 감지합니다.
+window.addEventListener("scroll", updateScrollToTopButton, { passive: true });
+document.addEventListener("scroll", updateScrollToTopButton, {
+  passive: true,
+  capture: true
+});
+
+window.addEventListener("resize", updateScrollToTopButton);
 
 
 function getChapterSize(category = currentCategory) {
