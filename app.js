@@ -1,4 +1,4 @@
-// v16.1: show one clean category card at a time and remove arrow decoration
+// v16.3: smart 50-word random review across word and N5-N3 pools
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -6,7 +6,7 @@ import {
   addSharedItems,
   updateSharedItem,
   removeSharedItem
-} from "./firebase.js?v=161";
+} from "./firebase.js?v=163";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -20,6 +20,7 @@ const WRONG_COUNTS_KEY = "jpAppWrongCountsV5";
 const ADDED_BY_KEY = "jpAppAddedByV9";
 const MIGRATION_KEY = "jpAppCloudMigrationV9";
 const STUDY_PROGRESS_KEY = "jpAppStudyProgressV15";
+const RANDOM_REVIEW_HISTORY_KEY = "jpAppRandomReviewHistoryV163";
 
 let sharedItems = [];
 let cloudConnected = false;
@@ -128,6 +129,8 @@ const randomReviewCount = document.getElementById("randomReviewCount");
 const randomCountPanel = document.getElementById("randomCountPanel");
 const randomSelectedTitle = document.getElementById("randomSelectedTitle");
 const randomCountHelp = document.getElementById("randomCountHelp");
+const startSmartRandomButton = document.getElementById("startSmartRandomButton");
+const smartRandomStatus = document.getElementById("smartRandomStatus");
 const openSharedListButton = document.getElementById("openSharedListButton");
 const closeSharedListButton = document.getElementById("closeSharedListButton");
 const sharedOwnerCards = document.getElementById("sharedOwnerCards");
@@ -1354,12 +1357,22 @@ function shuffleItems(items) {
 }
 
 function renderRandomScreen() {
-  randomWordCount.textContent = `${getCategoryItems("word").length}개 등록`;
-  randomReviewCount.textContent = `${getCategoryItems("review").length}개 등록`;
-  randomCountPanel.hidden = true;
-  document.querySelectorAll(".random-category-button").forEach(button => {
-    button.classList.remove("selected");
-  });
+  const pool = getRandomReviewPool();
+  const history = getRandomReviewHistory();
+  const seenCount = Math.min(history.length, pool.length);
+  const remaining = Math.max(0, pool.length - seenCount);
+
+  if (smartRandomStatus) {
+    smartRandomStatus.textContent = pool.length === 0
+      ? "등록된 단어가 없습니다."
+      : remaining === 0
+        ? `총 ${pool.length}개 한 바퀴 완료 · 다음에는 새 순서로 시작`
+        : `전체 ${pool.length}개 · 아직 안 본 단어 ${remaining}개`;
+  }
+
+  if (startSmartRandomButton) {
+    startSmartRandomButton.disabled = pool.length === 0;
+  }
 }
 
 function selectRandomCategory(category, selectedButton) {
@@ -1382,18 +1395,92 @@ function selectRandomCategory(category, selectedButton) {
   });
 }
 
-function startRandomStudy(count) {
-  const items = getCategoryItems(randomCategory);
 
-  if (items.length < count) {
-    alert(`${CATEGORY_NAMES[randomCategory]}가 ${count}개보다 적습니다.`);
+function getRandomReviewPool() {
+  const wordItems = getCategoryItems("word");
+  const reviewItems = getCategoryItems("review");
+  const unique = new Map();
+
+  [...wordItems, ...reviewItems].forEach(item => {
+    const key = `${normalizeDuplicateText(item.word)}::${normalizeDuplicateText(item.reading)}`;
+    if (!unique.has(key)) unique.set(key, item);
+  });
+
+  return [...unique.values()];
+}
+
+function getRandomReviewHistory() {
+  const saved = loadJson(RANDOM_REVIEW_HISTORY_KEY, []);
+  return Array.isArray(saved) ? saved : [];
+}
+
+function saveRandomReviewHistory(ids) {
+  saveJson(RANDOM_REVIEW_HISTORY_KEY, ids);
+}
+
+function getSmartRandomReviewItems(count = 50) {
+  const pool = getRandomReviewPool();
+
+  if (pool.length === 0) return [];
+
+  const history = new Set(getRandomReviewHistory().map(String));
+  let unseen = pool.filter(item => !history.has(String(item.id)));
+
+  // 한 바퀴를 다 돌았으면 기록을 초기화하고 새 순서로 다시 시작
+  if (unseen.length === 0) {
+    history.clear();
+    unseen = [...pool];
+  }
+
+  const selected = [];
+
+  // 아직 안 본 단어를 우선 선택
+  selected.push(...shuffleItems(unseen).slice(0, Math.min(count, unseen.length)));
+
+  // 마지막 묶음이 50개보다 적으면 이전에 본 단어에서 부족한 만큼 채움
+  if (selected.length < count) {
+    const selectedIds = new Set(selected.map(item => String(item.id)));
+    const fillers = shuffleItems(
+      pool.filter(item => !selectedIds.has(String(item.id)))
+    ).slice(0, count - selected.length);
+
+    selected.push(...fillers);
+  }
+
+  return selected;
+}
+
+function completeSmartRandomReview(items) {
+  const pool = getRandomReviewPool();
+  const poolIds = new Set(pool.map(item => String(item.id)));
+  const history = new Set(
+    getRandomReviewHistory()
+      .map(String)
+      .filter(id => poolIds.has(id))
+  );
+
+  items.forEach(item => history.add(String(item.id)));
+
+  // 전체 단어를 한 번씩 다 봤다면 다음 시작을 위해 기록 초기화
+  if (pool.length > 0 && history.size >= pool.length) {
+    saveRandomReviewHistory([]);
+  } else {
+    saveRandomReviewHistory([...history]);
+  }
+}
+
+function startRandomStudy(count = 50) {
+  const items = getSmartRandomReviewItems(50);
+
+  if (items.length === 0) {
+    alert("단어 또는 N5~N3 추가단어에 등록된 항목이 없습니다.");
     return;
   }
 
-  currentCategory = randomCategory;
-  randomRequestedCount = count;
+  currentCategory = "word";
+  randomRequestedCount = items.length;
   studyMode = "random";
-  startStudy(shuffleItems(items).slice(0, count));
+  startStudy(items);
 }
 
 function startChapter(chapter, forceRestart = false) {
@@ -1518,6 +1605,10 @@ function finishStudy() {
     clearChapterProgress();
   }
 
+  if (studyMode === "random") {
+    completeSmartRandomReview(currentItems);
+  }
+
   completeTitle.textContent = studyMode === "annoying"
     ? `${categoryName} 복습 완료!`
     : studyMode === "search"
@@ -1527,7 +1618,7 @@ function finishStudy() {
         : `${categoryName} 제 ${selectedChapter}장 완료!`;
 
   completeMessage.textContent = studyMode === "random"
-    ? `${randomRequestedCount}개 랜덤복습을 마쳤습니다.`
+    ? `${currentItems.length}개 랜덤복습을 마쳤습니다. 다음에는 다른 단어를 우선 보여줍니다.`
     : `${roundNumber}회독까지 진행했습니다.`;
   renderHome();
   showScreen("complete");
@@ -2103,6 +2194,22 @@ homeCarouselDots.forEach(dot => {
     scrollHomeCarouselTo(Number(dot.dataset.homeSlide));
   });
 });
+
+openRandomButton.addEventListener("click", () => {
+  renderRandomScreen();
+  showScreen("random");
+});
+
+closeRandomButton.addEventListener("click", () => {
+  renderHome();
+  showScreen("home");
+});
+
+if (startSmartRandomButton) {
+  startSmartRandomButton.addEventListener("click", () => {
+    startRandomStudy(50);
+  });
+}
 
 document.querySelectorAll(".category-book").forEach(button => {
   button.addEventListener("click", () => {

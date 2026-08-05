@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f1113">
   <title>일본어 학습 앱</title>
-  <link rel="stylesheet" href="style.css?v=161">
+  <link rel="stylesheet" href="style.css?v=163">
 </head>
 <body>
   <main id="app">
@@ -60,7 +60,7 @@
         <span class="random-icon">🎲</span>
         <span>
           <strong>랜덤복습</strong>
-          <small>단어 · N5~N3 추가단어</small>
+          <small>두 목록을 섞어서 새로운 50개씩</small>
         </span>
         <b>›</b>
       </button>
@@ -133,30 +133,16 @@
         <div></div>
       </header>
 
-      <section class="random-panel">
-        <p class="random-guide">복습할 목차를 먼저 선택하세요.</p>
-
-        <div class="random-category-grid">
-          <button class="random-category-button" data-random-category="word" type="button">
-            <strong>단어</strong>
-            <span id="randomWordCount">0개 등록</span>
-          </button>
-          <button class="random-category-button" data-random-category="review" type="button">
-            <strong>N5~N3 추가단어</strong>
-            <span id="randomReviewCount">0개 등록</span>
-          </button>
+      <section class="random-panel smart-random-panel">
+        <div class="smart-random-card">
+          <span class="smart-random-icon">🎲</span>
+          <h3>단어 + N5~N3 추가단어</h3>
+          <p>아직 랜덤복습에서 보지 않은 단어를 먼저 골라 50개씩 보여줍니다.</p>
+          <small id="smartRandomStatus">다음 50개를 준비합니다.</small>
+          <button id="startSmartRandomButton" class="primary-button" type="button">랜덤복습 시작</button>
         </div>
-
-        <section id="randomCountPanel" class="random-count-panel" hidden>
-          <p><strong id="randomSelectedTitle">단어</strong>에서 몇 개를 복습할까요?</p>
-          <div class="random-count-grid">
-            <button class="random-count-button" data-random-count="50" type="button">50개</button>
-            <button class="random-count-button" data-random-count="100" type="button">100개</button>
-            <button class="random-count-button" data-random-count="200" type="button">200개</button>
-          </div>
-          <small id="randomCountHelp">등록된 개수보다 큰 버튼은 선택할 수 없습니다.</small>
-        </section>
       </section>
+    </section>
     </section>
 
     <!-- 전체 검색 -->
@@ -420,6 +406,6 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=161"></script>
+  <script type="module" src="app.js?v=163"></script>
 </body>
 </html>
