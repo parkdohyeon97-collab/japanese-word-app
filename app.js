@@ -1902,9 +1902,12 @@ function getPreferredJapaneseVoice() {
   );
 
   const preferredNames = [
+    "siri voice 1","siri 1","siri male","siri",
     "otoya premium", "otoya enhanced", "otoya", "オトヤ",
     "kyoko premium", "kyoko enhanced", "kyoko", "キョウコ"
   ];
+
+  console.table(japaneseVoices.map(v=>({name:v.name,lang:v.lang,default:v.default})));
 
   for (const preferredName of preferredNames) {
     const matchedVoice = japaneseVoices.find(voice =>
