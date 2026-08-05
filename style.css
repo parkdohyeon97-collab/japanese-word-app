@@ -1791,3 +1791,66 @@ body.study-menu-open {
     width: 320px;
   }
 }
+
+
+/* v17.2 Safari 음성 진단/선택 */
+.browser-voice-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(110, 185, 204, 0.25);
+  border-radius: 18px;
+  background: rgba(110, 185, 204, 0.06);
+}
+
+.browser-voice-section h3,
+.tts-dialog h3 {
+  margin: 0;
+}
+
+.browser-voice-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.browser-voice-actions button {
+  margin: 0;
+}
+
+.voice-debug-details {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.voice-debug-details summary {
+  cursor: pointer;
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.voice-debug-details pre {
+  max-height: 240px;
+  margin: 12px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.tts-divider {
+  width: 100%;
+  margin: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 520px) {
+  .browser-voice-actions {
+    grid-template-columns: 1fr;
+  }
+}

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0f1113">
   <title>일본어 학습 앱</title>
-  <link rel="stylesheet" href="style.css?v=171">
+  <link rel="stylesheet" href="style.css?v=172">
 </head>
 <body>
   <main id="app">
@@ -329,6 +329,35 @@
 
         <p class="help">API 키는 이 기기에만 저장되며 GitHub에는 올라가지 않습니다.</p>
 
+        <section class="browser-voice-section">
+          <h3>아이폰 기본 음성</h3>
+          <p class="help">Safari가 실제로 인식한 일본어 음성만 표시됩니다.</p>
+
+          <button id="refreshBrowserVoicesButton" class="secondary-button" type="button">사용 가능한 음성 확인</button>
+
+          <label>
+            사용할 일본어 음성
+            <select id="browserVoiceSelect">
+              <option value="">자동 선택</option>
+            </select>
+          </label>
+
+          <div class="browser-voice-actions">
+            <button id="testBrowserVoiceButton" class="secondary-button" type="button">선택 음성 테스트</button>
+            <button id="saveBrowserVoiceButton" class="primary-button" type="button">기본 음성 저장</button>
+          </div>
+
+          <p id="browserVoiceStatus" class="help"></p>
+          <details class="voice-debug-details">
+            <summary>Safari 음성 진단 보기</summary>
+            <pre id="browserVoiceDebugList">아직 확인하지 않았습니다.</pre>
+          </details>
+        </section>
+
+        <hr class="tts-divider">
+
+        <h3>ElevenLabs 설정</h3>
+
         <label>
           ElevenLabs API 키
           <input id="elevenLabsApiKeyInput" type="password" autocomplete="off" placeholder="sk_...">
@@ -415,7 +444,7 @@
       </section>
     </div>
 
-  <script type="module" src="app.js?v=171"></script>
+  <script type="module" src="app.js?v=172"></script>
 
 <div id="studyMenuSheet" class="study-menu-sheet" hidden>
   <button id="studyMenuBackdrop" class="study-menu-backdrop" type="button" aria-label="학습 메뉴 닫기"></button>
