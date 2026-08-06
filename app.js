@@ -1,4 +1,4 @@
-// v22.4: persist grammar example reading and translation in Firebase batch saves
+// v22.5: reveal all grammar details in one tap and play example audio on tap
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=224";
+} from "./firebase.js?v=225";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2785,20 +2785,12 @@ function updateGrammarReveal() {
   const visible = grammarRevealStage > 0;
   answerElement.hidden = !visible;
 
-  grammarCoreStage.hidden = grammarRevealStage < 1;
-  grammarExampleStage.hidden = grammarRevealStage < 2;
-  grammarReadingStage.hidden = grammarRevealStage < 3;
-  grammarTranslationStage.hidden = grammarRevealStage < 4;
+  grammarCoreStage.hidden = !visible;
+  grammarExampleStage.hidden = !visible;
+  grammarReadingStage.hidden = !visible;
+  grammarTranslationStage.hidden = !visible;
 
-  const labels = [
-    "접속·뜻 보기",
-    "예문 보기",
-    "히라가나 보기",
-    "해석 보기",
-    "전부 확인"
-  ];
-
-  meaningButton.textContent = labels[Math.min(grammarRevealStage, 4)];
+  meaningButton.textContent = visible ? "전부 확인" : "뜻 보기";
 }
 
 function showCurrentItem() {
@@ -2854,12 +2846,15 @@ function showCurrentItem() {
     grammarConnection.textContent = item.reading || "";
     grammarMeaning.textContent = item.meaning || "";
     grammarExample.textContent = item.example || "예문이 아직 없습니다.";
+    grammarExample.setAttribute("role", "button");
+    grammarExample.setAttribute("tabindex", "0");
+    grammarExample.setAttribute("aria-label", "예문 일본어 음성 재생");
+    grammarExample.title = "눌러서 예문 듣기";
     grammarExampleReading.textContent = item.exampleReading || "히라가나가 아직 없습니다.";
     grammarTranslation.textContent = item.translation || "해석이 아직 없습니다.";
 
-    grammarRevealStage = restoreAnswerVisible ? 1 : 0;
+    grammarRevealStage = restoreAnswerVisible ? 4 : 0;
     updateGrammarReveal();
-    meaningButton.textContent = grammarRevealStage === 0 ? "접속·뜻 보기" : "예문 보기";
     knowButton.textContent = "✓ 알겠음";
   } else {
     wordElement.textContent = item.word;
@@ -2949,7 +2944,7 @@ function finishStudy() {
 
 meaningButton.addEventListener("click", () => {
   if (currentCategory === "grammar") {
-    if (grammarRevealStage < 4) grammarRevealStage += 1;
+    grammarRevealStage = 4;
     updateGrammarReveal();
     saveChapterProgress();
     saveRandomReviewProgress();
@@ -3514,6 +3509,33 @@ testElevenLabsVoiceButton.addEventListener("click", async () => {
   testElevenLabsVoiceButton.textContent = "테스트";
 });
 
+
+
+async function playCurrentGrammarExample(event) {
+  if (event) event.stopPropagation();
+  if (currentCategory !== "grammar") return;
+
+  const item = getCurrentItem();
+  const exampleText = String(item?.example || "").trim();
+  if (!exampleText) return;
+
+  grammarExample.classList.add("is-speaking");
+
+  try {
+    await playElevenLabsText(exampleText);
+  } finally {
+    window.setTimeout(() => {
+      grammarExample.classList.remove("is-speaking");
+    }, 500);
+  }
+}
+
+grammarExample?.addEventListener("click", playCurrentGrammarExample);
+grammarExample?.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  playCurrentGrammarExample(event);
+});
 
 soundTouchArea.addEventListener("click", event => {
   // 버튼이나 입력 요소를 누른 경우에는 발음을 재생하지 않음

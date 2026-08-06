@@ -2214,3 +2214,34 @@ body.study-menu-open {
 #grammarParserNote {
   font-weight: 700;
 }
+
+
+/* v22.5 문법 한 번에 보기 + 예문 터치 음성 */
+.grammar-example {
+  cursor: pointer;
+  position: relative;
+  padding-right: 34px;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.grammar-example::after {
+  content: "🔊";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  opacity: 0.72;
+}
+
+.grammar-example:active,
+.grammar-example.is-speaking {
+  transform: scale(0.99);
+  background: rgba(110, 185, 204, 0.08);
+}
+
+.grammar-example:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
