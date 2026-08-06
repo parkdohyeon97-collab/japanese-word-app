@@ -2208,3 +2208,9 @@ body.study-menu-open {
   color: var(--muted);
   line-height: 1.55;
 }
+
+
+/* v22.2 한 줄 라벨 형식 */
+#grammarParserNote {
+  font-weight: 700;
+}

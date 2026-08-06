@@ -1,4 +1,4 @@
-// v22.1: grammar label-based parser with blank-line separation
+// v22.2: stable inline label:value paste format
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=221";
+} from "./firebase.js?v=222";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -1719,14 +1719,14 @@ function configureAddScreenForCategory() {
     meaningInput.placeholder = "예) ~부터, ~만 봐도";
 
     bulkHelpText.textContent =
-      "문형·접속·뜻·예문·히라가나·해석 라벨을 기준으로 자동 분리합니다. 문법 사이에는 빈 줄만 넣어도 되고, 구분선은 필요 없습니다. 라벨이 없으면 6줄 순서로 인식합니다.";
+      "문법은 반드시 ‘문형: 내용’처럼 한 줄씩 입력합니다. 문법 하나가 끝나면 빈 줄을 넣고 다음 문형을 시작하세요.";
     bulkExample.textContent =
-`～からして
-명사 + からして
-~부터, ~만 봐도
-この映画はタイトルからして面白そうだ。
-このえいがはタイトルからしておもしろそうだ。
-이 영화는 제목부터 재미있을 것 같다.`;
+`문형: ～からして
+접속: 명사 + からして
+뜻: ~부터, ~만 봐도
+예문: この映画はタイトルからして面白そうだ。
+히라가나: このえいがはタイトルからしておもしろそうだ。
+해석: 이 영화는 제목부터 재미있을 것 같다.`;
   } else {
     wordInputLabel.textContent = "일본어";
     readingInputLabel.textContent = "읽는 법";
@@ -1933,10 +1933,11 @@ function stripSmartPasteDecorations(line) {
 }
 
 
-function expandInlineSmartPasteLabels(rawText) {
-  const labelPattern = /^(단어|한자|일본어(?:\s*표현|\s*문장)?|표현|히라가나|읽는\s*법|읽기|요미가나|뜻|의미|한국어(?:\s*뜻|\s*문장)?|한글|문형|접속|예문(?:\s*히라가나)?|해석)\s*[:：]\s*(.+)$/i;
 
-  return expandInlineSmartPasteLabels(rawText)
+function expandInlineSmartPasteLabels(rawText) {
+  const labelPattern = /^(단어|한자|일본어(?:\s*표현|\s*문장)?|표현|히라가나|읽는\s*법|읽기|요미가나|뜻|의미|한국어(?:\s*뜻|\s*문장)?|한글|문형|접속|예문(?:\s*히라가나)?|해석|번역)\s*[:：]\s*(.*)$/i;
+
+  return String(rawText || "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n")
@@ -1987,6 +1988,7 @@ function splitDelimitedLine(line) {
 
 
 
+
 function normalizeGrammarLabel(line) {
   const normalized = normalizeSmartPasteLabel(line);
 
@@ -2005,22 +2007,33 @@ function normalizeGrammarLabel(line) {
   return aliases[normalized] || "";
 }
 
-function parseGrammarBulkItems(rawText) {
-  const normalized = expandInlineSmartPasteLabels(rawText)
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n");
+function parseInlineLabelLine(line) {
+  const match = String(line || "").trim().match(
+    /^(문형|접속|뜻|의미|예문|히라가나|예문\s*히라가나|해석|번역|단어|한자|일본어(?:\s*문장)?|한국어(?:\s*문장)?|읽는\s*법|읽기)\s*[:：]\s*(.*)$/i
+  );
 
-  const rawLines = normalized
+  if (!match) return null;
+
+  return {
+    label: match[1],
+    field: normalizeGrammarLabel(match[1]),
+    value: match[2].trim()
+  };
+}
+
+function parseGrammarBulkItems(rawText) {
+  const lines = String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
     .split("\n")
     .map(line => stripSmartPasteDecorations(line))
     .filter(line => line && !isSmartPasteSeparator(line));
 
   const items = [];
   const errors = [];
-  let currentItem = null;
-  let currentField = "";
+  let current = null;
 
-  function createEmptyItem() {
+  function emptyItem() {
     return {
       word: "",
       reading: "",
@@ -2032,108 +2045,133 @@ function parseGrammarBulkItems(rawText) {
     };
   }
 
-  function appendToField(item, field, value) {
-    if (!field || !value) return;
-    item[field] = item[field]
-      ? `${item[field]}\n${value}`
-      : value;
-  }
+  function finish(lineNumber) {
+    if (!current) return;
 
-  function finishCurrentItem(lineNumber) {
-    if (!currentItem) return;
+    const required = [
+      ["문형", "word"],
+      ["접속", "reading"],
+      ["뜻", "meaning"],
+      ["예문", "example"],
+      ["히라가나", "exampleReading"],
+      ["해석", "translation"]
+    ];
 
-    const missing = [
-      ["문형", currentItem.word],
-      ["접속", currentItem.reading],
-      ["뜻", currentItem.meaning],
-      ["예문", currentItem.example],
-      ["히라가나", currentItem.exampleReading],
-      ["해석", currentItem.translation]
-    ].filter(([, value]) => !String(value || "").trim());
+    const missing = required
+      .filter(([, field]) => !String(current[field] || "").trim())
+      .map(([label]) => label);
 
-    if (missing.length > 0) {
+    if (missing.length) {
       errors.push({
         lineNumber,
-        text: currentItem.word || "(문형 없음)",
-        reason: `${missing.map(([label]) => label).join(", ")} 항목이 없습니다.`
+        text: current.word || "(문형 없음)",
+        reason: `${missing.join(", ")} 항목이 없습니다.`
       });
     } else {
-      items.push({
-        ...currentItem,
-        word: currentItem.word.trim(),
-        reading: currentItem.reading.trim(),
-        meaning: currentItem.meaning.trim(),
-        example: currentItem.example.trim(),
-        exampleReading: currentItem.exampleReading.trim(),
-        translation: currentItem.translation.trim()
-      });
+      items.push(current);
     }
 
-    currentItem = null;
-    currentField = "";
+    current = null;
   }
 
-  rawLines.forEach((line, index) => {
-    const labelField = normalizeGrammarLabel(line);
+  lines.forEach((line, index) => {
+    const parsed = parseInlineLabelLine(line);
 
-    if (labelField) {
-      if (labelField === "word") {
-        finishCurrentItem(index + 1);
-        currentItem = createEmptyItem();
-      } else if (!currentItem) {
-        currentItem = createEmptyItem();
-      }
-
-      currentField = labelField;
+    if (!parsed || !parsed.field) {
+      errors.push({
+        lineNumber: index + 1,
+        text: line,
+        reason: "문법은 ‘문형: 내용’처럼 한 줄 형식으로 입력해 주세요."
+      });
       return;
     }
 
-    if (!currentItem) {
-      // 라벨이 없는 6줄 형식도 기존처럼 지원합니다.
-      currentItem = createEmptyItem();
-      currentField = "word";
+    if (parsed.field === "word") {
+      finish(index + 1);
+      current = emptyItem();
+    } else if (!current) {
+      current = emptyItem();
     }
 
-    appendToField(currentItem, currentField, line);
+    current[parsed.field] = parsed.value;
   });
 
-  finishCurrentItem(rawLines.length + 1);
-
-  // 라벨이 전혀 없는 경우에는 6줄 순서 방식으로 다시 시도합니다.
-  if (items.length === 0 && errors.length > 0 && !rawLines.some(normalizeGrammarLabel)) {
-    const fallbackItems = [];
-    const fallbackErrors = [];
-
-    for (let index = 0; index < rawLines.length; index += 6) {
-      const group = rawLines.slice(index, index + 6);
-
-      if (group.length < 6) {
-        fallbackErrors.push({
-          lineNumber: index + 1,
-          text: group.join(" / "),
-          reason: "문법은 문형·접속·뜻·예문·히라가나·해석의 6개 항목이 필요합니다."
-        });
-        break;
-      }
-
-      fallbackItems.push({
-        word: group[0],
-        reading: group[1],
-        meaning: group[2],
-        example: group[3],
-        exampleReading: group[4],
-        translation: group[5],
-        autoReordered: false
-      });
-    }
-
-    return { items: fallbackItems, errors: fallbackErrors };
-  }
-
+  finish(lines.length + 1);
   return { items, errors };
 }
 
+function normalizeSimpleInlineLabel(label) {
+  const normalized = normalizeSmartPasteLabel(label);
+  const map = {
+    "단어": "word",
+    "한자": "word",
+    "일본어": "word",
+    "일본어표현": "word",
+    "표현": "word",
+    "일본어문장": "word",
+    "히라가나": "reading",
+    "읽는법": "reading",
+    "읽기": "reading",
+    "요미가나": "reading",
+    "뜻": "meaning",
+    "의미": "meaning",
+    "한국어뜻": "meaning",
+    "한국어": "meaning",
+    "한글": "meaning",
+    "한국어문장": "meaning"
+  };
+  return map[normalized] || "";
+}
+
+function parseSimpleInlineItems(rawText) {
+  const blocks = String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split(/\n\s*\n+/)
+    .map(block => block.trim())
+    .filter(Boolean);
+
+  const items = [];
+  const errors = [];
+  let matchedAny = false;
+
+  blocks.forEach((block, blockIndex) => {
+    const item = { word: "", reading: "", meaning: "", autoReordered: false };
+    const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
+
+    lines.forEach(line => {
+      const match = line.match(
+        /^(단어|한자|일본어(?:\s*표현|\s*문장)?|표현|히라가나|읽는\s*법|읽기|요미가나|뜻|의미|한국어(?:\s*뜻|\s*문장)?|한글)\s*[:：]\s*(.*)$/i
+      );
+      if (!match) return;
+
+      const field = normalizeSimpleInlineLabel(match[1]);
+      if (!field) return;
+
+      matchedAny = true;
+      item[field] = match[2].trim();
+    });
+
+    if (item.word || item.reading || item.meaning) {
+      if (item.word && item.reading && item.meaning) {
+        items.push(item);
+      } else {
+        errors.push({
+          lineNumber: blockIndex + 1,
+          text: block,
+          reason: "일본어·히라가나·한국어 중 빠진 항목이 있습니다."
+        });
+      }
+    }
+  });
+
+  return matchedAny ? { items, errors } : null;
+}
+
 function parseBulkItems(rawText) {
+  const inlineResult = parseSimpleInlineItems(rawText);
+  if (inlineResult) return inlineResult;
+
   const cleanedText = preprocessSmartPaste(rawText);
   const lines = cleanedText.split("\n")
     .map((line, index) => ({ text: line.trim(), lineNumber: index + 1 }))
