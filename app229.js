@@ -1,4 +1,4 @@
-console.info("Japanese Word App v22.6 loaded");
+console.info("Japanese Word App v22.9 clean performance fix loaded");
 // v22.5: reveal all grammar details in one tap and play example audio on tap
 import {
   waitForFirebaseReady,
@@ -9,7 +9,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=225";
+} from "./firebase.js?v=229";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -408,19 +408,26 @@ function saveUserItems(items) {
   saveJson(USER_ITEMS_KEY, items);
 }
 
+let wrongCountsCache = null;
+let graduatedMapCache = null;
+
 function getWrongCounts() {
+  if (wrongCountsCache) return wrongCountsCache;
   const data = loadJson(WRONG_COUNTS_KEY, {});
-  return data && typeof data === "object" ? data : {};
+  wrongCountsCache = data && typeof data === "object" ? data : {};
+  return wrongCountsCache;
 }
 
 function saveWrongCounts(counts) {
-  saveJson(WRONG_COUNTS_KEY, counts);
+  wrongCountsCache = counts && typeof counts === "object" ? counts : {};
+  saveJson(WRONG_COUNTS_KEY, wrongCountsCache);
 }
 
-
 function getGraduatedMap() {
+  if (graduatedMapCache) return graduatedMapCache;
   const data = loadJson(GRADUATED_ITEMS_KEY, {});
-  return data && typeof data === "object" ? data : {};
+  graduatedMapCache = data && typeof data === "object" ? data : {};
+  return graduatedMapCache;
 }
 
 function getGraduationKey(item) {
@@ -448,6 +455,7 @@ function setGraduated(item, graduated) {
     delete map[key];
   }
 
+  graduatedMapCache = map;
   saveJson(GRADUATED_ITEMS_KEY, map);
 }
 
@@ -616,17 +624,40 @@ function normalizeImportedItem(item) {
   };
 }
 
-function getAllItems() {
-  const baseWords = defaultWords.map(item => ({ ...item, category: "word" }));
-  const cloudItems = sharedItems.map(item => normalizeImportedItem({
+let allItemsCache = null;
+let normalizedSharedItemsCache = null;
+const categoryItemsCache = new Map();
+let groupedSharedItemsCache = null;
+
+function invalidateItemCaches() {
+  allItemsCache = null;
+  normalizedSharedItemsCache = null;
+  groupedSharedItemsCache = null;
+  categoryItemsCache.clear();
+}
+
+function getNormalizedSharedItems() {
+  if (normalizedSharedItemsCache) return normalizedSharedItemsCache;
+  normalizedSharedItemsCache = sharedItems.map(item => normalizeImportedItem({
     ...item,
-    category: item.category || "word"
+    category: item.category || "word",
+    addedBy: normalizeOwnerName(item.addedBy)
   }));
-  return [...baseWords, ...cloudItems];
+  return normalizedSharedItemsCache;
+}
+
+function getAllItems() {
+  if (allItemsCache) return allItemsCache;
+  const baseWords = defaultWords.map(item => ({ ...item, category: "word" }));
+  allItemsCache = [...baseWords, ...getNormalizedSharedItems()];
+  return allItemsCache;
 }
 
 function getCategoryItems(category) {
-  return getAllItems().filter(item => item.category === category);
+  if (categoryItemsCache.has(category)) return categoryItemsCache.get(category);
+  const items = getAllItems().filter(item => item.category === category);
+  categoryItemsCache.set(category, items);
+  return items;
 }
 
 
@@ -641,12 +672,7 @@ function normalizeOwnerName(value) {
 }
 
 function getSharedCloudItems() {
-  return sharedItems
-    .map(item => normalizeImportedItem({
-      ...item,
-      category: item.category || "word",
-      addedBy: normalizeOwnerName(item.addedBy)
-    }))
+  return getNormalizedSharedItems()
     .filter(item => item.word && item.reading && item.meaning);
 }
 
@@ -657,15 +683,14 @@ function getSharedItemKey(item) {
   ].join("::");
 }
 
-function getGroupedSharedItems(owner = "all") {
+function getAllGroupedSharedItems() {
+  if (groupedSharedItemsCache) return groupedSharedItemsCache;
+
   const groups = new Map();
 
   getSharedCloudItems().forEach(item => {
-    const itemOwner = normalizeOwnerName(item.addedBy);
-
-    if (owner !== "all" && itemOwner !== owner) return;
-
     const key = getSharedItemKey(item);
+
     if (!groups.has(key)) {
       groups.set(key, {
         word: item.word,
@@ -679,38 +704,23 @@ function getGroupedSharedItems(owner = "all") {
 
     const group = groups.get(key);
     const meaning = String(item.meaning || "").trim();
+    const owner = normalizeOwnerName(item.addedBy);
 
-    if (meaning && !group.meanings.includes(meaning)) {
-      group.meanings.push(meaning);
-    }
-
-    group.owners.add(itemOwner);
+    if (meaning && !group.meanings.includes(meaning)) group.meanings.push(meaning);
+    group.owners.add(owner);
     group.categories.add(item.category || "word");
     group.sourceItems.push(item);
   });
 
-  // 선택한 사람 목록에서도 상대방이 같은 단어를 넣었는지 표시하기 위해 전체 자료를 다시 확인
-  if (owner !== "all") {
-    const allItems = getSharedCloudItems();
-
-    groups.forEach((group, key) => {
-      allItems.forEach(item => {
-        if (getSharedItemKey(item) !== key) return;
-
-        const itemOwner = normalizeOwnerName(item.addedBy);
-        group.owners.add(itemOwner);
-
-        const meaning = String(item.meaning || "").trim();
-        if (meaning && !group.meanings.includes(meaning)) {
-          group.meanings.push(meaning);
-        }
-      });
-    });
-  }
-
-  return [...groups.values()].sort((a, b) =>
+  groupedSharedItemsCache = [...groups.values()].sort((a, b) =>
     String(a.word).localeCompare(String(b.word), "ja")
   );
+  return groupedSharedItemsCache;
+}
+
+function getGroupedSharedItems(owner = "all") {
+  const groups = getAllGroupedSharedItems();
+  return owner === "all" ? groups : groups.filter(group => group.owners.has(owner));
 }
 
 function updateSharedOwnerCounts() {
@@ -2883,8 +2893,6 @@ function showCurrentItem() {
   }
   restoreAnswerVisible = false;
 
-  saveChapterProgress();
-
   const count = getWrongCount(item.id);
   wrongCountBadge.textContent = `공부하겠음 ${count}회`;
   wrongCountBadge.classList.toggle("angry", count >= ANNOYING_LIMIT);
@@ -3333,9 +3341,6 @@ async function playElevenLabsText(text, { allowFallback = true } = {}) {
   }
 
   try {
-    soundButton.disabled = true;
-    soundButton.textContent = "…";
-
     if (activeElevenAudio) {
       activeElevenAudio.pause();
       activeElevenAudio.currentTime = 0;
@@ -3354,17 +3359,27 @@ async function playElevenLabsText(text, { allowFallback = true } = {}) {
     }
     return false;
   } finally {
-    soundButton.disabled = false;
-    soundButton.textContent = "🔊";
+    // 화면 전체 터치 음성 기능은 유지하며, 존재하지 않는 버튼은 조작하지 않습니다.
   }
 }
 
+let playSoundPending = false;
+
 async function playSound() {
+  if (playSoundPending) return;
+
   const item = getCurrentItem();
   if (!item) return;
+
   const speechText = String(item.word || item.reading || "").trim();
   if (!speechText) return;
-  await playElevenLabsText(speechText);
+
+  playSoundPending = true;
+  try {
+    await playElevenLabsText(speechText);
+  } finally {
+    playSoundPending = false;
+  }
 }
 
 function openTtsSettings() {
@@ -4264,6 +4279,28 @@ repairExistingItemsButton.addEventListener("click", async () => {
   await repairMalformedCloudItems(sharedItems, true);
 });
 
+
+let cloudUiRefreshFrame = 0;
+
+function scheduleCloudUiRefresh() {
+  if (cloudUiRefreshFrame) cancelAnimationFrame(cloudUiRefreshFrame);
+
+  cloudUiRefreshFrame = requestAnimationFrame(() => {
+    cloudUiRefreshFrame = 0;
+    renderHome();
+
+    if (!screens.chapter.hidden) renderChapterScreen();
+    if (!screens.add.hidden) renderRecentItems();
+    if (!screens.search.hidden) renderSearchResults();
+    if (!screens.duplicateScan.hidden) renderDuplicateScan();
+
+    if (!screens.sharedList.hidden) {
+      updateSharedOwnerCounts();
+      if (!sharedWordListArea.hidden) renderSharedWordList();
+    }
+  });
+}
+
 async function startCloudSync() {
   setCloudStatus("로그인 중…", "loading");
 
@@ -4274,6 +4311,7 @@ async function startCloudSync() {
       async items => {
         const firstConnection = !cloudConnected;
         sharedItems = items;
+        invalidateItemCaches();
         cloudConnected = true;
         setCloudStatus("공유 연결됨", "connected");
         if (firstConnection) startStudyProgressSync();
@@ -4294,16 +4332,7 @@ async function startCloudSync() {
           renderUnresolvedItems();
         }
 
-        renderHome();
-
-        if (!screens.chapter.hidden) renderChapterScreen();
-        if (!screens.add.hidden) renderRecentItems();
-        if (!screens.search.hidden) renderSearchResults();
-        if (!screens.duplicateScan.hidden) renderDuplicateScan();
-        if (!screens.sharedList.hidden) {
-          updateSharedOwnerCounts();
-          if (!sharedWordListArea.hidden) renderSharedWordList();
-        }
+        scheduleCloudUiRefresh();
 
         if (firstConnection) {
           try {
