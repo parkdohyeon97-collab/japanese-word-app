@@ -2050,3 +2050,64 @@ body.study-menu-open {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* v20.0 꼭 같이 외울 단어 */
+.related-words-dialog {
+  width: min(92vw, 520px);
+}
+
+.related-words-guide {
+  margin: 0 0 14px;
+}
+
+.related-words-list {
+  display: grid;
+  gap: 10px;
+  max-height: 54vh;
+  overflow-y: auto;
+}
+
+.related-word-option {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 15px;
+  border: 1px solid rgba(110, 185, 204, 0.26);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.related-word-option input {
+  width: 20px;
+  height: 20px;
+  margin-top: 5px;
+  accent-color: var(--teal);
+}
+
+.related-word-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.related-word-option strong {
+  font-size: 22px;
+  color: var(--text);
+}
+
+.related-word-option em {
+  color: var(--teal);
+  font-style: normal;
+}
+
+.related-word-option b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.related-word-option small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}

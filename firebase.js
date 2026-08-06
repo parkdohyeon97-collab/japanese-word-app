@@ -32,6 +32,7 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const sharedItemsCollection = collection(db, "sharedItems");
+const studyProgressCollection = collection(db, "studyProgress");
 
 let currentUser = null;
 
@@ -201,4 +202,35 @@ export async function removeSharedItem(itemId) {
   if (!currentUser) await waitForFirebaseReady();
   if (!itemId) throw new Error("삭제할 항목의 ID가 없습니다.");
   await deleteDoc(doc(db, "sharedItems", itemId));
+}
+
+
+export function listenToStudyProgress(profileName, onProgressChanged, onError) {
+  const profile = String(profileName || "도현").trim() || "도현";
+  const progressReference = doc(studyProgressCollection, simpleHash(profile));
+
+  return onSnapshot(
+    progressReference,
+    snapshot => {
+      onProgressChanged(snapshot.exists() ? snapshot.data() : null);
+    },
+    error => {
+      console.error("이어하기 동기화 불러오기 실패:", error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+export async function saveStudyProgress(profileName, progressMap) {
+  if (!currentUser) await waitForFirebaseReady();
+
+  const profile = String(profileName || "도현").trim() || "도현";
+  const progressReference = doc(studyProgressCollection, simpleHash(profile));
+
+  await setDoc(progressReference, {
+    profile,
+    progresses: progressMap && typeof progressMap === "object" ? progressMap : {},
+    updatedByUid: currentUser.uid,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
 }

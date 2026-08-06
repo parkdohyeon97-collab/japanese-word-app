@@ -1,12 +1,14 @@
-// v19.2: restore Japanese pronunciation when tapping the study card
+// v20.0: sync chapter resume across devices and recommend only essential related words
 import {
   waitForFirebaseReady,
   listenToSharedItems,
   addSharedItem,
   addSharedItems,
   updateSharedItem,
-  removeSharedItem
-} from "./firebase.js?v=192";
+  removeSharedItem,
+  listenToStudyProgress,
+  saveStudyProgress
+} from "./firebase.js?v=200";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -23,6 +25,106 @@ const STUDY_PROGRESS_KEY = "jpAppStudyProgressV15";
 const RANDOM_REVIEW_HISTORY_KEY = "jpAppRandomReviewHistoryV163";
 const RANDOM_REVIEW_PROGRESS_KEY = "jpAppRandomReviewProgressV164";
 const GRADUATED_ITEMS_KEY = "jpAppGraduatedItemsV19";
+
+
+const RELATED_WORDS = {
+  "始める": [
+    { word: "始まる", reading: "はじまる", meaning: "시작되다", reason: "「始める」와 꼭 같이 외우는 자동사" }
+  ],
+  "始まる": [
+    { word: "始める", reading: "はじめる", meaning: "시작하다", reason: "「始まる」와 꼭 같이 외우는 타동사" }
+  ],
+  "開ける": [
+    { word: "開く", reading: "あく", meaning: "열리다", reason: "자동사·타동사 짝" }
+  ],
+  "開く": [
+    { word: "開ける", reading: "あける", meaning: "열다", reason: "자동사·타동사 짝" }
+  ],
+  "閉める": [
+    { word: "閉まる", reading: "しまる", meaning: "닫히다", reason: "자동사·타동사 짝" }
+  ],
+  "閉まる": [
+    { word: "閉める", reading: "しめる", meaning: "닫다", reason: "자동사·타동사 짝" }
+  ],
+  "付ける": [
+    { word: "付く", reading: "つく", meaning: "붙다, 켜지다", reason: "자동사·타동사 짝" }
+  ],
+  "付く": [
+    { word: "付ける", reading: "つける", meaning: "붙이다, 켜다", reason: "자동사·타동사 짝" }
+  ],
+  "消す": [
+    { word: "消える", reading: "きえる", meaning: "꺼지다, 사라지다", reason: "자동사·타동사 짝" }
+  ],
+  "消える": [
+    { word: "消す", reading: "けす", meaning: "끄다, 지우다", reason: "자동사·타동사 짝" }
+  ],
+  "落とす": [
+    { word: "落ちる", reading: "おちる", meaning: "떨어지다", reason: "자동사·타동사 짝" }
+  ],
+  "落ちる": [
+    { word: "落とす", reading: "おとす", meaning: "떨어뜨리다", reason: "자동사·타동사 짝" }
+  ],
+  "増やす": [
+    { word: "増える", reading: "ふえる", meaning: "늘다, 증가하다", reason: "자동사·타동사 짝" }
+  ],
+  "増える": [
+    { word: "増やす", reading: "ふやす", meaning: "늘리다, 증가시키다", reason: "자동사·타동사 짝" }
+  ],
+  "減らす": [
+    { word: "減る", reading: "へる", meaning: "줄다, 감소하다", reason: "자동사·타동사 짝" }
+  ],
+  "減る": [
+    { word: "減らす", reading: "へらす", meaning: "줄이다, 감소시키다", reason: "자동사·타동사 짝" }
+  ],
+  "壊す": [
+    { word: "壊れる", reading: "こわれる", meaning: "망가지다, 부서지다", reason: "자동사·타동사 짝" }
+  ],
+  "壊れる": [
+    { word: "壊す", reading: "こわす", meaning: "망가뜨리다, 부수다", reason: "자동사·타동사 짝" }
+  ],
+  "決める": [
+    { word: "決まる", reading: "きまる", meaning: "정해지다", reason: "자동사·타동사 짝" }
+  ],
+  "決まる": [
+    { word: "決める", reading: "きめる", meaning: "정하다, 결정하다", reason: "자동사·타동사 짝" }
+  ],
+  "続ける": [
+    { word: "続く", reading: "つづく", meaning: "계속되다, 이어지다", reason: "자동사·타동사 짝" }
+  ],
+  "続く": [
+    { word: "続ける", reading: "つづける", meaning: "계속하다, 이어가다", reason: "자동사·타동사 짝" }
+  ],
+  "集める": [
+    { word: "集まる", reading: "あつまる", meaning: "모이다", reason: "자동사·타동사 짝" }
+  ],
+  "集まる": [
+    { word: "集める", reading: "あつめる", meaning: "모으다", reason: "자동사·타동사 짝" }
+  ],
+  "変える": [
+    { word: "変わる", reading: "かわる", meaning: "바뀌다, 변하다", reason: "자동사·타동사 짝" }
+  ],
+  "変わる": [
+    { word: "変える", reading: "かえる", meaning: "바꾸다, 변화시키다", reason: "자동사·타동사 짝" }
+  ],
+  "深い": [
+    { word: "浅い", reading: "あさい", meaning: "얕다", reason: "자주 함께 외우는 반대말" }
+  ],
+  "浅い": [
+    { word: "深い", reading: "ふかい", meaning: "깊다", reason: "자주 함께 외우는 반대말" }
+  ],
+  "重い": [
+    { word: "軽い", reading: "かるい", meaning: "가볍다", reason: "자주 함께 외우는 반대말" }
+  ],
+  "軽い": [
+    { word: "重い", reading: "おもい", meaning: "무겁다", reason: "자주 함께 외우는 반대말" }
+  ],
+  "経験": [
+    { word: "未経験", reading: "みけいけん", meaning: "경험이 없음, 미경험", reason: "실제로 자주 쓰는 핵심 파생어" }
+  ]
+};
+
+let pendingRelatedWords = [];
+let relatedSourceWord = "";
 
 let sharedItems = [];
 let cloudConnected = false;
@@ -242,6 +344,12 @@ const studyAgainButton = document.getElementById("studyAgainButton");
 const knowButton = document.getElementById("knowButton");
 const exitStudyButton = document.getElementById("exitStudyButton");
 const closeStudyButton = document.getElementById("closeStudyButton");
+const relatedWordsDialog = document.getElementById("relatedWordsDialog");
+const closeRelatedWordsButton = document.getElementById("closeRelatedWordsButton");
+const skipRelatedWordsButton = document.getElementById("skipRelatedWordsButton");
+const addSelectedRelatedWordsButton = document.getElementById("addSelectedRelatedWordsButton");
+const relatedWordsGuide = document.getElementById("relatedWordsGuide");
+const relatedWordsList = document.getElementById("relatedWordsList");
 
 const completeTitle = document.getElementById("completeTitle");
 const completeMessage = document.getElementById("completeMessage");
@@ -716,6 +824,75 @@ function showSharedOwnerSelection() {
 }
 
 
+
+let stopStudyProgressListener = null;
+let progressSyncTimer = null;
+let progressSyncReady = false;
+
+function getStudyProfileName() {
+  return String(addedBySelect?.value || localStorage.getItem(ADDED_BY_KEY) || "도현").trim() || "도현";
+}
+
+function mergeProgressMaps(localMap, remoteMap) {
+  const merged = { ...(localMap || {}) };
+
+  Object.entries(remoteMap || {}).forEach(([key, remoteProgress]) => {
+    const localProgress = merged[key];
+    if (!localProgress || Number(remoteProgress?.savedAt || 0) > Number(localProgress?.savedAt || 0)) {
+      merged[key] = remoteProgress;
+    }
+  });
+
+  return merged;
+}
+
+function applyRemoteStudyProgress(remoteDocument) {
+  const remoteMap = remoteDocument?.progresses;
+  if (!remoteMap || typeof remoteMap !== "object") {
+    progressSyncReady = true;
+    return;
+  }
+
+  const merged = mergeProgressMaps(getAllStudyProgress(), remoteMap);
+  saveJson(STUDY_PROGRESS_KEY, merged);
+  progressSyncReady = true;
+  renderHome();
+
+  if (!screens.chapter.hidden) renderChapterScreen();
+}
+
+function startStudyProgressSync() {
+  if (!cloudConnected) return;
+
+  if (stopStudyProgressListener) {
+    stopStudyProgressListener();
+    stopStudyProgressListener = null;
+  }
+
+  progressSyncReady = false;
+  stopStudyProgressListener = listenToStudyProgress(
+    getStudyProfileName(),
+    applyRemoteStudyProgress,
+    error => {
+      console.error(error);
+      progressSyncReady = true;
+    }
+  );
+}
+
+function queueStudyProgressSync() {
+  if (!cloudConnected) return;
+
+  window.clearTimeout(progressSyncTimer);
+  progressSyncTimer = window.setTimeout(async () => {
+    try {
+      await saveStudyProgress(getStudyProfileName(), getAllStudyProgress());
+    } catch (error) {
+      console.error("이어하기 위치 동기화 실패:", error);
+    }
+  }, 450);
+}
+
 function getAllStudyProgress() {
   const saved = loadJson(STUDY_PROGRESS_KEY, {});
   return saved && typeof saved === "object" ? saved : {};
@@ -744,12 +921,14 @@ function saveChapterProgress() {
     savedAt: Date.now()
   };
   saveJson(STUDY_PROGRESS_KEY, allProgress);
+  queueStudyProgressSync();
 }
 
 function clearChapterProgress(category = currentCategory, chapter = selectedChapter) {
   const allProgress = getAllStudyProgress();
   delete allProgress[getStudyProgressKey(category, chapter)];
   saveJson(STUDY_PROGRESS_KEY, allProgress);
+  queueStudyProgressSync();
 }
 
 function rebuildItemsFromIds(ids, category) {
@@ -1525,6 +1704,97 @@ function configureAddScreenForCategory() {
   }
 }
 
+
+function getUsefulRelatedWords(word) {
+  if (currentCategory !== "word") return [];
+
+  const existing = new Set(
+    getCategoryItems("word").map(item => normalizeDuplicateText(item.word))
+  );
+
+  return (RELATED_WORDS[String(word || "").trim()] || [])
+    .filter(item => !existing.has(normalizeDuplicateText(item.word)))
+    .slice(0, 2);
+}
+
+function closeRelatedWordsDialog() {
+  relatedWordsDialog.hidden = true;
+  document.body.classList.remove("dialog-open");
+  pendingRelatedWords = [];
+  relatedSourceWord = "";
+}
+
+function showRelatedWordsDialog(sourceWord) {
+  const suggestions = getUsefulRelatedWords(sourceWord);
+  if (suggestions.length === 0) return false;
+
+  relatedSourceWord = sourceWord;
+  pendingRelatedWords = suggestions;
+  relatedWordsGuide.textContent =
+    `「${sourceWord}」와 함께 외울 가치가 높은 단어만 골랐습니다.`;
+
+  relatedWordsList.innerHTML = suggestions.map((item, index) => `
+    <label class="related-word-option">
+      <input type="checkbox" value="${index}" checked>
+      <span>
+        <strong>${escapeHtml(item.word)}</strong>
+        <em>${escapeHtml(item.reading)}</em>
+        <b>${escapeHtml(item.meaning)}</b>
+        <small>${escapeHtml(item.reason)}</small>
+      </span>
+    </label>
+  `).join("");
+
+  relatedWordsDialog.hidden = false;
+  document.body.classList.add("dialog-open");
+  return true;
+}
+
+async function addSelectedRelatedWords() {
+  const selectedIndexes = [...relatedWordsList.querySelectorAll('input[type="checkbox"]:checked')]
+    .map(input => Number(input.value))
+    .filter(Number.isInteger);
+
+  const selected = selectedIndexes
+    .map(index => pendingRelatedWords[index])
+    .filter(Boolean)
+    .filter(item => !isDuplicate(item.word, getCategoryItems("word")));
+
+  if (selected.length === 0) {
+    closeRelatedWordsDialog();
+    return;
+  }
+
+  addSelectedRelatedWordsButton.disabled = true;
+  addSelectedRelatedWordsButton.textContent = "추가 중…";
+
+  try {
+    await addSharedItems(selected.map(item => ({
+      category: "word",
+      word: item.word,
+      reading: item.reading,
+      meaning: item.meaning,
+      addedBy: addedBySelect.value
+    })));
+
+    alert(`${selected.length}개 연관 단어를 추가했습니다.`);
+    closeRelatedWordsDialog();
+  } catch (error) {
+    console.error(error);
+    alert("연관 단어를 추가하지 못했습니다.");
+  } finally {
+    addSelectedRelatedWordsButton.disabled = false;
+    addSelectedRelatedWordsButton.textContent = "선택한 단어 추가";
+  }
+}
+
+closeRelatedWordsButton?.addEventListener("click", closeRelatedWordsDialog);
+skipRelatedWordsButton?.addEventListener("click", closeRelatedWordsDialog);
+addSelectedRelatedWordsButton?.addEventListener("click", addSelectedRelatedWords);
+relatedWordsDialog?.addEventListener("click", event => {
+  if (event.target === relatedWordsDialog) closeRelatedWordsDialog();
+});
+
 singleForm.addEventListener("submit", async event => {
   event.preventDefault();
 
@@ -1554,7 +1824,10 @@ singleForm.addEventListener("submit", async event => {
     });
 
     singleForm.reset();
-    alert("두 사람의 공유 단어장에 저장됐습니다.");
+
+    if (!showRelatedWordsDialog(word)) {
+      alert("두 사람의 공유 단어장에 저장됐습니다.");
+    }
   } catch (error) {
     console.error(error);
     alert("저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
@@ -1846,6 +2119,7 @@ saveBulkButton.addEventListener("click", async () => {
 addedBySelect.value = localStorage.getItem(ADDED_BY_KEY) || "도현";
 addedBySelect.addEventListener("change", () => {
   localStorage.setItem(ADDED_BY_KEY, addedBySelect.value);
+  startStudyProgressSync();
 });
 
 singleTabButton.addEventListener("click", () => {
@@ -2198,6 +2472,8 @@ function showCurrentItem() {
 
   answerElement.hidden = !restoreAnswerVisible;
   restoreAnswerVisible = false;
+
+  saveChapterProgress();
 
   const count = getWrongCount(item.id);
   wrongCountBadge.textContent = `공부하겠음 ${count}회`;
@@ -3555,6 +3831,7 @@ async function startCloudSync() {
         sharedItems = items;
         cloudConnected = true;
         setCloudStatus("공유 연결됨", "connected");
+        if (firstConnection) startStudyProgressSync();
 
         const repairReport = getMalformedItemRepairReport(items);
         const repairCount = repairReport.repairs.length;
