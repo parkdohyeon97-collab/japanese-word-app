@@ -1,4 +1,4 @@
-// v22.3: route grammar bulk input to the grammar parser before all other parsers
+// v22.4: persist grammar example reading and translation in Firebase batch saves
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=223";
+} from "./firebase.js?v=224";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2356,11 +2356,21 @@ function renderBulkPreview(result) {
 
 function updateBulkSaveButtonState() {
   const hasItems = lastBulkPreview.items.length > 0;
-  const allComplete = lastBulkPreview.items.every(item =>
-    String(item.word || "").trim() &&
-    String(item.reading || "").trim() &&
-    String(item.meaning || "").trim()
-  );
+  const allComplete = lastBulkPreview.items.every(item => {
+    const basicComplete =
+      String(item.word || "").trim() &&
+      String(item.reading || "").trim() &&
+      String(item.meaning || "").trim();
+
+    if (!basicComplete) return false;
+    if (currentCategory !== "grammar") return true;
+
+    return (
+      String(item.example || "").trim() &&
+      String(item.exampleReading || "").trim() &&
+      String(item.translation || "").trim()
+    );
+  });
 
   saveBulkButton.disabled = !(hasItems && allComplete);
 }
@@ -2429,7 +2439,12 @@ saveBulkButton.addEventListener("click", async () => {
     }
 
     const key = normalizeDuplicateText(cleanedItem.word);
-    if (!key || existingKeys.has(key)) {
+    if (!key) {
+      duplicateCount += 1;
+      return;
+    }
+
+    if (existingKeys.has(key) && currentCategory !== "grammar") {
       duplicateCount += 1;
       return;
     }
@@ -2453,7 +2468,8 @@ saveBulkButton.addEventListener("click", async () => {
 
   try {
     await addSharedItems(itemsToSave);
-    alert(`공유 저장 ${itemsToSave.length}개\n중복 제외 ${duplicateCount}개\n형식 오류 ${lastBulkPreview.errors.length}개`);
+    const saveLabel = currentCategory === "grammar" ? "문법 저장·갱신" : "공유 저장";
+    alert(`${saveLabel} ${itemsToSave.length}개\n중복 제외 ${duplicateCount}개\n형식 오류 ${lastBulkPreview.errors.length}개`);
 
     bulkInput.value = "";
     bulkPreview.hidden = true;

@@ -154,6 +154,8 @@ export async function addSharedItems(items) {
         reading: String(item.reading || "").trim(),
         meaning: String(item.meaning || "").trim(),
         example: String(item.example || "").trim(),
+        exampleReading: String(item.exampleReading || "").trim(),
+        translation: String(item.translation || "").trim(),
         addedBy: String(item.addedBy || "도현").trim(),
         createdByUid: currentUser.uid,
         createdAt: serverTimestamp()
