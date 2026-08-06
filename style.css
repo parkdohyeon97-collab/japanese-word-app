@@ -2261,3 +2261,9 @@ body.study-menu-open {
   font-weight: 800;
   pointer-events: none;
 }
+
+
+/* v22.7 성능 최적화 버전 */
+#buildVersionBadge {
+  contain: content;
+}
