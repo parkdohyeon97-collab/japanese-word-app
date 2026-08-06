@@ -2111,3 +2111,76 @@ body.study-menu-open {
   color: var(--muted);
   line-height: 1.45;
 }
+
+
+/* v21.0 문법 카드 4단계 공개 */
+.grammar-extra-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.grammar-extra-fields[hidden] {
+  display: none !important;
+}
+
+.grammar-answer {
+  display: grid;
+  gap: 13px;
+  width: 100%;
+  text-align: left;
+}
+
+.grammar-answer[hidden],
+.grammar-stage[hidden] {
+  display: none !important;
+}
+
+.grammar-stage {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid rgba(110, 185, 204, 0.22);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.grammar-stage-label {
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.grammar-connection,
+.grammar-meaning,
+.grammar-example,
+.grammar-example-reading,
+.grammar-translation {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
+.grammar-connection {
+  font-size: 17px;
+}
+
+.grammar-meaning {
+  margin-bottom: 4px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.grammar-example {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.grammar-example-reading {
+  color: var(--teal);
+  font-size: 16px;
+}
+
+.grammar-translation {
+  color: var(--text);
+  font-size: 16px;
+}

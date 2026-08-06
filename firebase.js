@@ -121,6 +121,8 @@ export async function addSharedItem(item) {
     reading: String(item.reading || "").trim(),
     meaning: String(item.meaning || "").trim(),
     example: String(item.example || "").trim(),
+    exampleReading: String(item.exampleReading || "").trim(),
+    translation: String(item.translation || "").trim(),
     addedBy: String(item.addedBy || "도현").trim(),
     createdByUid: currentUser.uid,
     createdAt: serverTimestamp()
@@ -183,6 +185,8 @@ export async function updateSharedItem(itemId, item) {
     reading: String(item.reading || "").trim(),
     meaning: String(item.meaning || "").trim(),
     example: String(item.example || "").trim(),
+    exampleReading: String(item.exampleReading || "").trim(),
+    translation: String(item.translation || "").trim(),
     addedBy: String(item.addedBy || "도현").trim(),
     createdByUid: String(item.createdByUid || currentUser.uid),
     createdAt: item.createdAt || serverTimestamp(),

@@ -1,4 +1,4 @@
-// v20.0: sync chapter resume across devices and recommend only essential related words
+// v21.0: grammar six-field input and four-stage study card
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=200";
+} from "./firebase.js?v=210";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -273,6 +273,10 @@ const bulkPanel = document.getElementById("bulkPanel");
 const wordInput = document.getElementById("wordInput");
 const readingInput = document.getElementById("readingInput");
 const meaningInput = document.getElementById("meaningInput");
+const grammarExtraFields = document.getElementById("grammarExtraFields");
+const grammarExampleInput = document.getElementById("grammarExampleInput");
+const grammarExampleReadingInput = document.getElementById("grammarExampleReadingInput");
+const grammarTranslationInput = document.getElementById("grammarTranslationInput");
 const wordInputLabel = document.getElementById("wordInputLabel");
 const readingInputLabel = document.getElementById("readingInputLabel");
 const meaningInputLabel = document.getElementById("meaningInputLabel");
@@ -311,6 +315,16 @@ const wordElement = document.getElementById("word");
 const answerElement = document.getElementById("answer");
 const readingElement = document.getElementById("reading");
 const meaningElement = document.getElementById("meaning");
+const grammarAnswer = document.getElementById("grammarAnswer");
+const grammarCoreStage = document.getElementById("grammarCoreStage");
+const grammarExampleStage = document.getElementById("grammarExampleStage");
+const grammarReadingStage = document.getElementById("grammarReadingStage");
+const grammarTranslationStage = document.getElementById("grammarTranslationStage");
+const grammarConnection = document.getElementById("grammarConnection");
+const grammarMeaning = document.getElementById("grammarMeaning");
+const grammarExample = document.getElementById("grammarExample");
+const grammarExampleReading = document.getElementById("grammarExampleReading");
+const grammarTranslation = document.getElementById("grammarTranslation");
 const wrongCountBadge = document.getElementById("wrongCountBadge");
 const soundTouchArea = document.getElementById("soundTouchArea");
 const graduateCurrentButton = document.getElementById("graduateCurrentButton");
@@ -370,6 +384,7 @@ let nextRoundItems = [];
 let randomCategory = "word";
 let randomRequestedCount = 50;
 let restoreAnswerVisible = false;
+let grammarRevealStage = 0;
 
 function loadJson(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -520,7 +535,10 @@ function normalizeImportedItem(item) {
     ...item,
     word: stripOuterSeparators(item.word),
     reading: stripOuterSeparators(item.reading),
-    meaning: stripOuterSeparators(item.meaning)
+    meaning: stripOuterSeparators(item.meaning),
+    example: String(item.example || "").trim(),
+    exampleReading: String(item.exampleReading || "").trim(),
+    translation: String(item.translation || "").trim()
   };
 
   const numericWordOnly = /^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(
@@ -918,6 +936,7 @@ function saveChapterProgress() {
     currentItemIds: currentItems.map(item => item.id),
     nextRoundItemIds: nextRoundItems.map(item => item.id),
     answerVisible: !answerElement.hidden,
+    grammarRevealStage: currentCategory === "grammar" ? grammarRevealStage : 0,
     savedAt: Date.now()
   };
   saveJson(STUDY_PROGRESS_KEY, allProgress);
@@ -960,6 +979,9 @@ function resumeChapterProgress(progress) {
   );
   roundNumber = Math.max(1, Number(progress.roundNumber) || 1);
   restoreAnswerVisible = Boolean(progress.answerVisible);
+  grammarRevealStage = progress.category === "grammar"
+    ? Math.max(0, Math.min(4, Number(progress.grammarRevealStage) || 0))
+    : 0;
 
   showScreen("study");
   showCurrentItem();
@@ -1660,7 +1682,9 @@ async function deleteItem(id) {
 
 function configureAddScreenForCategory() {
   const isConversation = currentCategory === "conversation";
+  const isGrammar = currentCategory === "grammar";
   screens.add.classList.toggle("conversation-add", isConversation);
+  grammarExtraFields.hidden = !isGrammar;
 
   if (isConversation) {
     wordInputLabel.textContent = "일본어 문장";
@@ -1683,6 +1707,24 @@ function configureAddScreenForCategory() {
 1. なんじにあおうか？
 何時に会おうか？
 몇 시에 만날까?`;
+  } else if (isGrammar) {
+    wordInputLabel.textContent = "문형";
+    readingInputLabel.textContent = "접속";
+    meaningInputLabel.textContent = "뜻";
+
+    wordInput.placeholder = "例) ～からして";
+    readingInput.placeholder = "例) 명사 + からして";
+    meaningInput.placeholder = "예) ~부터, ~만 봐도";
+
+    bulkHelpText.textContent =
+      "문법은 6줄씩 입력합니다: 문형 → 접속 → 뜻 → 예문 → 히라가나 → 해석";
+    bulkExample.textContent =
+`～からして
+명사 + からして
+~부터, ~만 봐도
+この映画はタイトルからして面白そうだ。
+このえいがはタイトルからしておもしろそうだ。
+이 영화는 제목부터 재미있을 것 같다.`;
   } else {
     wordInputLabel.textContent = "일본어";
     readingInputLabel.textContent = "읽는 법";
@@ -1801,8 +1843,16 @@ singleForm.addEventListener("submit", async event => {
   const word = wordInput.value.trim();
   const reading = readingInput.value.trim();
   const meaning = meaningInput.value.trim();
+  const example = currentCategory === "grammar" ? grammarExampleInput.value.trim() : "";
+  const exampleReading = currentCategory === "grammar" ? grammarExampleReadingInput.value.trim() : "";
+  const translation = currentCategory === "grammar" ? grammarTranslationInput.value.trim() : "";
 
   if (!word || !reading || !meaning) return;
+
+  if (currentCategory === "grammar" && (!example || !exampleReading || !translation)) {
+    alert("문법은 문형·접속·뜻·예문·히라가나·해석을 모두 입력해 주세요.");
+    return;
+  }
 
   if (!cloudConnected) {
     alert("공유 단어장 연결이 끝난 뒤 다시 눌러 주세요.");
@@ -1820,6 +1870,9 @@ singleForm.addEventListener("submit", async event => {
       word,
       reading,
       meaning,
+      example,
+      exampleReading,
+      translation,
       addedBy: addedBySelect.value
     });
 
@@ -1847,6 +1900,55 @@ function splitDelimitedLine(line) {
   const slash = stripped.split(/\s*\/\s*/).map(stripOuterSeparators).filter(Boolean);
   if (slash.length >= 3) return slash;
   return null;
+}
+
+
+function parseGrammarBulkItems(rawText) {
+  const lines = rawText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const items = [];
+  const errors = [];
+
+  for (let index = 0; index < lines.length; index += 6) {
+    const group = lines.slice(index, index + 6);
+
+    if (group.length < 6) {
+      errors.push({
+        lineNumber: index + 1,
+        text: group.join(" / "),
+        reason: "문법은 6줄 형식이 필요합니다."
+      });
+      break;
+    }
+
+    const [word, reading, meaning, example, exampleReading, translation] = group;
+
+    if (!word || !reading || !meaning || !example || !exampleReading || !translation) {
+      errors.push({
+        lineNumber: index + 1,
+        text: group.join(" / "),
+        reason: "문법 6개 항목 중 빈칸이 있습니다."
+      });
+      continue;
+    }
+
+    items.push({
+      word: stripListNumber(word),
+      reading,
+      meaning,
+      example,
+      exampleReading,
+      translation,
+      autoReordered: false
+    });
+  }
+
+  return { items, errors };
 }
 
 function parseBulkItems(rawText) {
@@ -1929,7 +2031,14 @@ function renderBulkPreview(result) {
         <span>저장 전 수정 가능</span>
       </div>
 
-      ${currentCategory === "conversation" ? `
+      ${currentCategory === "grammar" ? `
+      <label>문형<input class="bulk-edit-input" data-field="word" value="${escapeHtml(item.word)}"></label>
+      <label>접속<input class="bulk-edit-input" data-field="reading" value="${escapeHtml(item.reading)}"></label>
+      <label>뜻<input class="bulk-edit-input" data-field="meaning" value="${escapeHtml(item.meaning)}"></label>
+      <label>예문<textarea class="bulk-edit-input" data-field="example" rows="2">${escapeHtml(item.example || "")}</textarea></label>
+      <label>히라가나<textarea class="bulk-edit-input" data-field="exampleReading" rows="2">${escapeHtml(item.exampleReading || "")}</textarea></label>
+      <label>해석<textarea class="bulk-edit-input" data-field="translation" rows="2">${escapeHtml(item.translation || "")}</textarea></label>
+      ` : currentCategory === "conversation" ? `
       <label>
         한국어 문장
         <input class="bulk-edit-input" data-field="meaning" value="${escapeHtml(item.meaning)}" autocomplete="off">
@@ -2068,10 +2177,20 @@ saveBulkButton.addEventListener("click", async () => {
     const cleanedItem = {
       word: String(item.word || "").trim(),
       reading: String(item.reading || "").trim(),
-      meaning: String(item.meaning || "").trim()
+      meaning: String(item.meaning || "").trim(),
+      example: String(item.example || "").trim(),
+      exampleReading: String(item.exampleReading || "").trim(),
+      translation: String(item.translation || "").trim()
     };
 
     if (!cleanedItem.word || !cleanedItem.reading || !cleanedItem.meaning) {
+      return;
+    }
+
+    if (
+      currentCategory === "grammar"
+      && (!cleanedItem.example || !cleanedItem.exampleReading || !cleanedItem.translation)
+    ) {
       return;
     }
 
@@ -2401,6 +2520,7 @@ function startStudy(items) {
   currentIndex = 0;
   roundNumber = 1;
   restoreAnswerVisible = false;
+  grammarRevealStage = 0;
 
   showScreen("study");
   showCurrentItem();
@@ -2408,6 +2528,27 @@ function startStudy(items) {
 
 function getCurrentItem() {
   return currentItems[currentIndex];
+}
+
+
+function updateGrammarReveal() {
+  const visible = grammarRevealStage > 0;
+  answerElement.hidden = !visible;
+
+  grammarCoreStage.hidden = grammarRevealStage < 1;
+  grammarExampleStage.hidden = grammarRevealStage < 2;
+  grammarReadingStage.hidden = grammarRevealStage < 3;
+  grammarTranslationStage.hidden = grammarRevealStage < 4;
+
+  const labels = [
+    "접속·뜻 보기",
+    "예문 보기",
+    "히라가나 보기",
+    "해석 보기",
+    "전부 확인"
+  ];
+
+  meaningButton.textContent = labels[Math.min(grammarRevealStage, 4)];
 }
 
 function showCurrentItem() {
@@ -2439,6 +2580,11 @@ function showCurrentItem() {
   totalNumber.textContent = currentItems.length;
 
   const isConversation = currentCategory === "conversation";
+  const isGrammar = currentCategory === "grammar";
+
+  grammarAnswer.hidden = true;
+  readingElement.hidden = false;
+  meaningElement.hidden = false;
 
   if (isConversation) {
     wordElement.textContent = item.meaning;
@@ -2449,6 +2595,22 @@ function showCurrentItem() {
     meaningElement.classList.add("conversation-reading");
     meaningButton.textContent = restoreAnswerVisible ? "일본어 확인" : "일본어 보기";
     knowButton.textContent = "✓ 말할 수 있음";
+  } else if (isGrammar) {
+    wordElement.textContent = item.word;
+    readingElement.hidden = true;
+    meaningElement.hidden = true;
+    grammarAnswer.hidden = false;
+
+    grammarConnection.textContent = item.reading || "";
+    grammarMeaning.textContent = item.meaning || "";
+    grammarExample.textContent = item.example || "예문이 아직 없습니다.";
+    grammarExampleReading.textContent = item.exampleReading || "히라가나가 아직 없습니다.";
+    grammarTranslation.textContent = item.translation || "해석이 아직 없습니다.";
+
+    grammarRevealStage = restoreAnswerVisible ? 1 : 0;
+    updateGrammarReveal();
+    meaningButton.textContent = grammarRevealStage === 0 ? "접속·뜻 보기" : "예문 보기";
+    knowButton.textContent = "✓ 알겠음";
   } else {
     wordElement.textContent = item.word;
     readingElement.textContent = item.reading;
@@ -2470,7 +2632,9 @@ function showCurrentItem() {
     studyMode === "graduated" ? "졸업 취소" : "현재 단어 졸업"
   );
 
-  answerElement.hidden = !restoreAnswerVisible;
+  if (currentCategory !== "grammar") {
+    answerElement.hidden = !restoreAnswerVisible;
+  }
   restoreAnswerVisible = false;
 
   saveChapterProgress();
@@ -2534,6 +2698,14 @@ function finishStudy() {
 }
 
 meaningButton.addEventListener("click", () => {
+  if (currentCategory === "grammar") {
+    if (grammarRevealStage < 4) grammarRevealStage += 1;
+    updateGrammarReveal();
+    saveChapterProgress();
+    saveRandomReviewProgress();
+    return;
+  }
+
   if (answerElement.hidden) {
     answerElement.hidden = false;
     meaningButton.textContent = currentCategory === "conversation"
