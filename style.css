@@ -2263,7 +2263,13 @@ body.study-menu-open {
 }
 
 
-/* v22.7 성능 최적화 버전 */
-#buildVersionBadge {
-  contain: content;
+/* v22.8 iPhone 터치 반응 최적화 */
+button,
+a,
+.chapter-card,
+.study-card,
+#soundTouchArea,
+.grammar-example {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
