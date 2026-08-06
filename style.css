@@ -2184,3 +2184,19 @@ body.study-menu-open {
   color: var(--text);
   font-size: 16px;
 }
+
+
+/* v22.0 전체 탭 스마트 붙여넣기 */
+.smart-paste-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 2px 0 10px;
+  padding: 7px 11px;
+  border: 1px solid rgba(110, 185, 204, 0.24);
+  border-radius: 999px;
+  background: rgba(110, 185, 204, 0.08);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 800;
+}

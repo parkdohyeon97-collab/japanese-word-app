@@ -1,4 +1,4 @@
-// v21.0: grammar six-field input and four-stage study card
+// v22.0: smart paste normalization for word, grammar, conversation and review tabs
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=210";
+} from "./firebase.js?v=220";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -1696,7 +1696,7 @@ function configureAddScreenForCategory() {
     meaningInput.placeholder = "예) 오늘 뭐 했어?";
 
     bulkHelpText.textContent =
-      "한글·일본어·히라가나 순서가 뒤섞여도 문자 종류를 보고 자동 정리합니다. 번호, -, /, |, 여러 칸 띄어쓰기도 정리합니다.";
+      "한국어·일본어·히라가나 라벨, 번호, 구분선, 빈 줄을 자동 제거합니다. 순서가 뒤섞여도 문자 종류를 보고 자동 정리합니다.";
     bulkExample.textContent =
 `今日、何したの？
 きょう、なにしたの？
@@ -1717,7 +1717,7 @@ function configureAddScreenForCategory() {
     meaningInput.placeholder = "예) ~부터, ~만 봐도";
 
     bulkHelpText.textContent =
-      "문법은 6줄씩 입력합니다: 문형 → 접속 → 뜻 → 예문 → 히라가나 → 해석";
+      "문형·접속·뜻·예문·히라가나·해석 라벨과 번호·구분선을 자동 제거합니다. 라벨이 없어도 6줄 순서로 인식합니다.";
     bulkExample.textContent =
 `～からして
 명사 + からして
@@ -1734,7 +1734,7 @@ function configureAddScreenForCategory() {
     readingInput.placeholder = "例) しょくどう";
     meaningInput.placeholder = "例) 식당";
 
-    bulkHelpText.textContent = "3줄·하이픈·파이프 형식을 모두 자동 인식합니다.";
+    bulkHelpText.textContent = "라벨·번호·구분선·빈 줄을 자동 제거합니다. 3줄·하이픈·파이프 형식도 모두 인식합니다.";
     bulkExample.textContent =
 `勝ち目
 かちめ
@@ -1887,6 +1887,87 @@ singleForm.addEventListener("submit", async event => {
   }
 });
 
+
+const SMART_PASTE_LABELS = new Set([
+  "단어", "한자", "일본어", "일본어표현", "표현",
+  "히라가나", "읽는법", "읽기", "요미가나",
+  "뜻", "의미", "한국어뜻", "한국어", "한글",
+  "문형", "접속", "예문", "예문히라가나", "해석",
+  "일본어문장", "한국어문장"
+]);
+
+function normalizeSmartPasteLabel(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s　]+/g, "")
+    .replace(/^[【\[\(（〈《「『]+|[】\]\)）〉》」』:：]+$/g, "")
+    .toLowerCase();
+}
+
+function isSmartPasteLabel(line) {
+  const normalized = normalizeSmartPasteLabel(line);
+  return SMART_PASTE_LABELS.has(normalized);
+}
+
+function isSmartPasteSeparator(line) {
+  const value = String(line || "").trim();
+  if (!value) return false;
+
+  return (
+    /^[~〜～_\-—–―=＊*·•・□■◆◇○●◆▽▼△▲─━]{3,}$/.test(value)
+    || /^[\s~〜～_\-—–―=＊*·•・□■◆◇○●◆▽▼△▲─━]+$/.test(value)
+  );
+}
+
+function stripSmartPasteDecorations(line) {
+  return String(line || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*/, "")
+    .replace(/^[【\[\(（〈《「『]\s*/, "")
+    .replace(/\s*[】\]\)）〉》」』]\s*$/, "")
+    .trim();
+}
+
+
+function expandInlineSmartPasteLabels(rawText) {
+  const labelPattern = /^(단어|한자|일본어(?:\s*표현|\s*문장)?|표현|히라가나|읽는\s*법|읽기|요미가나|뜻|의미|한국어(?:\s*뜻|\s*문장)?|한글|문형|접속|예문(?:\s*히라가나)?|해석)\s*[:：]\s*(.+)$/i;
+
+  return expandInlineSmartPasteLabels(rawText)
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map(line => {
+      const match = line.trim().match(labelPattern);
+      return match ? `${match[1]}\n${match[2]}` : line;
+    })
+    .join("\n");
+}
+
+function preprocessSmartPaste(rawText) {
+  return String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map(stripSmartPasteDecorations)
+    .filter(line => line && !isSmartPasteSeparator(line) && !isSmartPasteLabel(line))
+    .join("\n");
+}
+
+function splitSmartPasteBlocks(rawText) {
+  const normalized = String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  const rawBlocks = normalized
+    .split(/\n\s*\n+/)
+    .map(block => preprocessSmartPaste(block))
+    .filter(Boolean);
+
+  return rawBlocks;
+}
+
 function isStandaloneListNumber(line) {
   return /^\s*(?:\d+|[①-⑳])\s*[.)、:：\-]?\s*$/.test(String(line || ""));
 }
@@ -1904,9 +1985,8 @@ function splitDelimitedLine(line) {
 
 
 function parseGrammarBulkItems(rawText) {
-  const lines = rawText
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
+  const cleanedText = preprocessSmartPaste(rawText);
+  const lines = cleanedText
     .split("\n")
     .map(line => line.trim())
     .filter(Boolean);
@@ -1952,7 +2032,8 @@ function parseGrammarBulkItems(rawText) {
 }
 
 function parseBulkItems(rawText) {
-  const lines = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
+  const cleanedText = preprocessSmartPaste(rawText);
+  const lines = cleanedText.split("\n")
     .map((line, index) => ({ text: line.trim(), lineNumber: index + 1 }))
     .filter(line => line.text);
 
