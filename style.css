@@ -2245,3 +2245,19 @@ body.study-menu-open {
   outline-offset: 4px;
   border-radius: 8px;
 }
+
+
+/* v22.6 배포 확인용 버전 표시 */
+#buildVersionBadge {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 9999;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.72);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 10px;
+  font-weight: 800;
+  pointer-events: none;
+}
