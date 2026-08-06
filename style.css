@@ -2247,7 +2247,7 @@ body.study-menu-open {
 }
 
 
-/* 앱 버전 표시 */
+/* v22.6 배포 확인용 버전 표시 */
 #buildVersionBadge {
   position: fixed;
   left: 8px;
@@ -2263,7 +2263,19 @@ body.study-menu-open {
 }
 
 
-/* iPhone 터치 반응 최적화 */
+/* v22.8 iPhone 터치 반응 최적화 */
+button,
+a,
+.chapter-card,
+.study-card,
+#soundTouchArea,
+.grammar-example {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* v22.9 터치 반응 보조 */
 button,
 a,
 .chapter-card,

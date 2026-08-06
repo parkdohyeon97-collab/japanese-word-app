@@ -1,4 +1,4 @@
-console.info("Japanese Word App v22.9 clean performance fix loaded");
+console.info("Japanese Word App v22.9 safe performance fix loaded");
 // v22.5: reveal all grammar details in one tap and play example audio on tap
 import {
   waitForFirebaseReady,
@@ -923,9 +923,26 @@ function queueStudyProgressSync() {
   }, 450);
 }
 
+let studyProgressCache = null;
+let localProgressSaveTimer = 0;
+
 function getAllStudyProgress() {
+  if (studyProgressCache) return studyProgressCache;
   const saved = loadJson(STUDY_PROGRESS_KEY, {});
-  return saved && typeof saved === "object" ? saved : {};
+  studyProgressCache = saved && typeof saved === "object" ? saved : {};
+  return studyProgressCache;
+}
+
+function flushLocalStudyProgress() {
+  window.clearTimeout(localProgressSaveTimer);
+  localProgressSaveTimer = 0;
+  if (!studyProgressCache) return;
+  saveJson(STUDY_PROGRESS_KEY, studyProgressCache);
+}
+
+function scheduleLocalStudyProgressSave() {
+  window.clearTimeout(localProgressSaveTimer);
+  localProgressSaveTimer = window.setTimeout(flushLocalStudyProgress, 180);
 }
 
 function getStudyProgressKey(category = currentCategory, chapter = selectedChapter) {
@@ -951,14 +968,17 @@ function saveChapterProgress() {
     grammarRevealStage: currentCategory === "grammar" ? grammarRevealStage : 0,
     savedAt: Date.now()
   };
-  saveJson(STUDY_PROGRESS_KEY, allProgress);
+
+  studyProgressCache = allProgress;
+  scheduleLocalStudyProgressSave();
   queueStudyProgressSync();
 }
 
 function clearChapterProgress(category = currentCategory, chapter = selectedChapter) {
   const allProgress = getAllStudyProgress();
   delete allProgress[getStudyProgressKey(category, chapter)];
-  saveJson(STUDY_PROGRESS_KEY, allProgress);
+  studyProgressCache = allProgress;
+  flushLocalStudyProgress();
   queueStudyProgressSync();
 }
 
@@ -2582,20 +2602,36 @@ function getRandomReviewProgress() {
   return saved && typeof saved === "object" ? saved : null;
 }
 
+let randomProgressSaveTimer = 0;
+let pendingRandomProgress = null;
+
+function flushRandomReviewProgress() {
+  window.clearTimeout(randomProgressSaveTimer);
+  randomProgressSaveTimer = 0;
+  if (!pendingRandomProgress) return;
+  saveJson(RANDOM_REVIEW_PROGRESS_KEY, pendingRandomProgress);
+}
+
 function saveRandomReviewProgress() {
   if (studyMode !== "random" || currentItems.length === 0) return;
 
-  saveJson(RANDOM_REVIEW_PROGRESS_KEY, {
+  pendingRandomProgress = {
     currentIndex,
     roundNumber,
     currentItemIds: currentItems.map(item => item.id),
     nextRoundItemIds: nextRoundItems.map(item => item.id),
     answerVisible: !answerElement.hidden,
     savedAt: Date.now()
-  });
+  };
+
+  window.clearTimeout(randomProgressSaveTimer);
+  randomProgressSaveTimer = window.setTimeout(flushRandomReviewProgress, 180);
 }
 
 function clearRandomReviewProgress() {
+  window.clearTimeout(randomProgressSaveTimer);
+  randomProgressSaveTimer = 0;
+  pendingRandomProgress = null;
   localStorage.removeItem(RANDOM_REVIEW_PROGRESS_KEY);
 }
 
@@ -3358,8 +3394,6 @@ async function playElevenLabsText(text, { allowFallback = true } = {}) {
       alert("ElevenLabs 음성을 불러오지 못해서 아이폰 기본 음성으로 재생했습니다.\n설정의 API 키와 목소리를 확인해 주세요.");
     }
     return false;
-  } finally {
-    // 화면 전체 터치 음성 기능은 유지하며, 존재하지 않는 버튼은 조작하지 않습니다.
   }
 }
 
@@ -4361,6 +4395,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && !screens.study.hidden) {
     saveChapterProgress();
     saveRandomReviewProgress();
+    flushLocalStudyProgress();
+    flushRandomReviewProgress();
   }
 });
 
@@ -4368,6 +4404,8 @@ window.addEventListener("pagehide", () => {
   if (!screens.study.hidden) {
     saveChapterProgress();
     saveRandomReviewProgress();
+    flushLocalStudyProgress();
+    flushRandomReviewProgress();
   }
 });
 
