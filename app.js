@@ -1,4 +1,4 @@
-// v22.2: stable inline label:value paste format
+// v22.3: route grammar bulk input to the grammar parser before all other parsers
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=222";
+} from "./firebase.js?v=223";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -2169,6 +2169,10 @@ function parseSimpleInlineItems(rawText) {
 }
 
 function parseBulkItems(rawText) {
+  if (/^\s*(문형|접속|예문|해석)\s*[:：]/m.test(String(rawText || ""))) {
+    return parseGrammarBulkItems(rawText);
+  }
+
   const inlineResult = parseSimpleInlineItems(rawText);
   if (inlineResult) return inlineResult;
 
@@ -2361,12 +2365,21 @@ function updateBulkSaveButtonState() {
   saveBulkButton.disabled = !(hasItems && allComplete);
 }
 
+function parseBulkInputByCurrentCategory(rawText) {
+  if (currentCategory === "grammar") {
+    return parseGrammarBulkItems(rawText);
+  }
+
+  return parseBulkItems(rawText);
+}
+
 previewBulkButton.addEventListener("click", () => {
   if (!bulkInput.value.trim()) {
-    alert("먼저 단어를 붙여넣어 주세요.");
+    alert("먼저 내용을 붙여넣어 주세요.");
     return;
   }
-  renderBulkPreview(parseBulkItems(bulkInput.value));
+
+  renderBulkPreview(parseBulkInputByCurrentCategory(bulkInput.value));
 });
 
 bulkInput.addEventListener("input", () => {
