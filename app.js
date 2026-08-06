@@ -1,4 +1,4 @@
-// v22.0: smart paste normalization for word, grammar, conversation and review tabs
+// v22.1: grammar label-based parser with blank-line separation
 import {
   waitForFirebaseReady,
   listenToSharedItems,
@@ -8,7 +8,7 @@ import {
   removeSharedItem,
   listenToStudyProgress,
   saveStudyProgress
-} from "./firebase.js?v=220";
+} from "./firebase.js?v=221";
 
 const CATEGORY_CHAPTER_SIZES = {
   word: 100,
@@ -281,6 +281,7 @@ const wordInputLabel = document.getElementById("wordInputLabel");
 const readingInputLabel = document.getElementById("readingInputLabel");
 const meaningInputLabel = document.getElementById("meaningInputLabel");
 const bulkHelpText = document.getElementById("bulkHelpText");
+const grammarParserNote = document.getElementById("grammarParserNote");
 const bulkExample = document.getElementById("bulkExample");
 const bulkInput = document.getElementById("bulkInput");
 const saveBulkButton = document.getElementById("saveBulkButton");
@@ -1685,6 +1686,7 @@ function configureAddScreenForCategory() {
   const isGrammar = currentCategory === "grammar";
   screens.add.classList.toggle("conversation-add", isConversation);
   grammarExtraFields.hidden = !isGrammar;
+  if (grammarParserNote) grammarParserNote.hidden = !isGrammar;
 
   if (isConversation) {
     wordInputLabel.textContent = "일본어 문장";
@@ -1717,7 +1719,7 @@ function configureAddScreenForCategory() {
     meaningInput.placeholder = "예) ~부터, ~만 봐도";
 
     bulkHelpText.textContent =
-      "문형·접속·뜻·예문·히라가나·해석 라벨과 번호·구분선을 자동 제거합니다. 라벨이 없어도 6줄 순서로 인식합니다.";
+      "문형·접속·뜻·예문·히라가나·해석 라벨을 기준으로 자동 분리합니다. 문법 사이에는 빈 줄만 넣어도 되고, 구분선은 필요 없습니다. 라벨이 없으면 6줄 순서로 인식합니다.";
     bulkExample.textContent =
 `～からして
 명사 + からして
@@ -1984,48 +1986,148 @@ function splitDelimitedLine(line) {
 }
 
 
+
+function normalizeGrammarLabel(line) {
+  const normalized = normalizeSmartPasteLabel(line);
+
+  const aliases = {
+    "문형": "word",
+    "접속": "reading",
+    "뜻": "meaning",
+    "의미": "meaning",
+    "예문": "example",
+    "히라가나": "exampleReading",
+    "예문히라가나": "exampleReading",
+    "해석": "translation",
+    "번역": "translation"
+  };
+
+  return aliases[normalized] || "";
+}
+
 function parseGrammarBulkItems(rawText) {
-  const cleanedText = preprocessSmartPaste(rawText);
-  const lines = cleanedText
+  const normalized = expandInlineSmartPasteLabels(rawText)
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+
+  const rawLines = normalized
     .split("\n")
-    .map(line => line.trim())
-    .filter(Boolean);
+    .map(line => stripSmartPasteDecorations(line))
+    .filter(line => line && !isSmartPasteSeparator(line));
 
   const items = [];
   const errors = [];
+  let currentItem = null;
+  let currentField = "";
 
-  for (let index = 0; index < lines.length; index += 6) {
-    const group = lines.slice(index, index + 6);
-
-    if (group.length < 6) {
-      errors.push({
-        lineNumber: index + 1,
-        text: group.join(" / "),
-        reason: "문법은 6줄 형식이 필요합니다."
-      });
-      break;
-    }
-
-    const [word, reading, meaning, example, exampleReading, translation] = group;
-
-    if (!word || !reading || !meaning || !example || !exampleReading || !translation) {
-      errors.push({
-        lineNumber: index + 1,
-        text: group.join(" / "),
-        reason: "문법 6개 항목 중 빈칸이 있습니다."
-      });
-      continue;
-    }
-
-    items.push({
-      word: stripListNumber(word),
-      reading,
-      meaning,
-      example,
-      exampleReading,
-      translation,
+  function createEmptyItem() {
+    return {
+      word: "",
+      reading: "",
+      meaning: "",
+      example: "",
+      exampleReading: "",
+      translation: "",
       autoReordered: false
-    });
+    };
+  }
+
+  function appendToField(item, field, value) {
+    if (!field || !value) return;
+    item[field] = item[field]
+      ? `${item[field]}\n${value}`
+      : value;
+  }
+
+  function finishCurrentItem(lineNumber) {
+    if (!currentItem) return;
+
+    const missing = [
+      ["문형", currentItem.word],
+      ["접속", currentItem.reading],
+      ["뜻", currentItem.meaning],
+      ["예문", currentItem.example],
+      ["히라가나", currentItem.exampleReading],
+      ["해석", currentItem.translation]
+    ].filter(([, value]) => !String(value || "").trim());
+
+    if (missing.length > 0) {
+      errors.push({
+        lineNumber,
+        text: currentItem.word || "(문형 없음)",
+        reason: `${missing.map(([label]) => label).join(", ")} 항목이 없습니다.`
+      });
+    } else {
+      items.push({
+        ...currentItem,
+        word: currentItem.word.trim(),
+        reading: currentItem.reading.trim(),
+        meaning: currentItem.meaning.trim(),
+        example: currentItem.example.trim(),
+        exampleReading: currentItem.exampleReading.trim(),
+        translation: currentItem.translation.trim()
+      });
+    }
+
+    currentItem = null;
+    currentField = "";
+  }
+
+  rawLines.forEach((line, index) => {
+    const labelField = normalizeGrammarLabel(line);
+
+    if (labelField) {
+      if (labelField === "word") {
+        finishCurrentItem(index + 1);
+        currentItem = createEmptyItem();
+      } else if (!currentItem) {
+        currentItem = createEmptyItem();
+      }
+
+      currentField = labelField;
+      return;
+    }
+
+    if (!currentItem) {
+      // 라벨이 없는 6줄 형식도 기존처럼 지원합니다.
+      currentItem = createEmptyItem();
+      currentField = "word";
+    }
+
+    appendToField(currentItem, currentField, line);
+  });
+
+  finishCurrentItem(rawLines.length + 1);
+
+  // 라벨이 전혀 없는 경우에는 6줄 순서 방식으로 다시 시도합니다.
+  if (items.length === 0 && errors.length > 0 && !rawLines.some(normalizeGrammarLabel)) {
+    const fallbackItems = [];
+    const fallbackErrors = [];
+
+    for (let index = 0; index < rawLines.length; index += 6) {
+      const group = rawLines.slice(index, index + 6);
+
+      if (group.length < 6) {
+        fallbackErrors.push({
+          lineNumber: index + 1,
+          text: group.join(" / "),
+          reason: "문법은 문형·접속·뜻·예문·히라가나·해석의 6개 항목이 필요합니다."
+        });
+        break;
+      }
+
+      fallbackItems.push({
+        word: group[0],
+        reading: group[1],
+        meaning: group[2],
+        example: group[3],
+        exampleReading: group[4],
+        translation: group[5],
+        autoReordered: false
+      });
+    }
+
+    return { items: fallbackItems, errors: fallbackErrors };
   }
 
   return { items, errors };

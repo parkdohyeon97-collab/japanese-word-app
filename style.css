@@ -2200,3 +2200,11 @@ body.study-menu-open {
   font-size: 12px;
   font-weight: 800;
 }
+
+
+/* v22.1 문법 라벨 파서 안내 */
+#grammarParserNote {
+  margin: -2px 0 10px;
+  color: var(--muted);
+  line-height: 1.55;
+}
